@@ -14,9 +14,48 @@ body{font-family:'Inter',sans-serif;background-color:#f3f4f6}.red-brand{backgrou
 #timer-display{font-variant-numeric: tabular-nums;}
 .timer-warn{color: #D32F2F; animation: pulse 1s infinite;}
 @keyframes pulse{0%{opacity:1}50%{opacity:0.5}100%{opacity:1}}
+/* Finish Overlay Styles */
+#finish-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(255,255,255,0.95);
+    z-index: 1000;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+.checkmark-circle {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: block;
+    stroke-width: 2;
+    stroke: #31c48d;
+    stroke-miterlimit: 10;
+    box-shadow: inset 0px 0px 0px #31c48d;
+    animation: fill .4s ease-in-out .4s forwards, scale .3s ease-in-out .9s both;
+}
+.checkmark-check {
+    transform-origin: 50% 50%;
+    stroke-dasharray: 48;
+    stroke-dashoffset: 48;
+    animation: stroke .3s cubic-bezier(0.65, 0, 0.45, 1) .8s forwards;
+}
+@keyframes stroke { 100% { stroke-dashoffset: 0; } }
+@keyframes scale { 0%, 100% { transform: none; } 50% { transform: scale3d(1.1, 1.1, 1); } }
+@keyframes fill { 100% { box-shadow: inset 0px 0px 0px 40px #31c48d; } }
 </style>
 </head>
 <body class="pb-12">
+<div id="finish-overlay">
+    <svg class="checkmark-circle" viewBox="0 0 52 52">
+        <circle class="checkmark-circle" cx="26" cy="26" r="25" fill="none"/>
+        <path class="checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+    </svg>
+    <h3 class="text-2xl font-black mt-4 text-gray-800 uppercase tracking-tighter">Topic Finished!</h3>
+    <p class="text-xs font-bold text-gray-400 mt-1 uppercase">Your progress has been saved</p>
+</div>
 <div id="offline-indicator" class="fixed top-0 left-0 w-full bg-orange-600 text-white text-[10px] font-bold uppercase p-1 justify-center items-center z-[1000]">Offline - Progress will sync later</div>
 
 <div id="login-screen" class="fixed inset-0 bg-white z-[200] flex items-center justify-center p-6 overflow-y-auto">
@@ -286,14 +325,43 @@ function checkAns(i,c){
 }
 
 async function submitReview(qV){
-    clearInterval(timerInterval);
-    const cQ=topicQs[idx],d={p_username:cur,p_question_id:cQ.id,p_quality:qV};
-    if(navigator.onLine)await _s.rpc('handle_user_answer',d);
-    else{const qe=JSON.parse(localStorage.getItem('q')||"[]");qe.push(d);localStorage.setItem('q',JSON.stringify(qe))}
-    if(qV>2){master=master.filter(i=>i.id!==cQ.id);localStorage.setItem('c_q',JSON.stringify(master));const bI=`badge-${cQ.topic.replace(/\s+/g,'')}`,bE=document.getElementById(bI);if(bE){const cC=parseInt(bE.innerText);bE.innerText=Math.max(0,cC-1)}}
-    if(idx<topicQs.length-1){idx++;loadQ()}else{sessionStorage.removeItem('lastTopic');if(navigator.onLine)await _s.rpc('update_user_streak',{p_username:cur});alert("Finished!");handleHardwareBack()}
-}
+    clearInterval(timerInterval); // Stops the timer you recently added
+    const cQ=topicQs[idx], d={p_username:cur, p_question_id:cQ.id, p_quality:qV};
+    
+    if(navigator.onLine) await _s.rpc('handle_user_answer',d);
+    else {
+        const qe=JSON.parse(localStorage.getItem('q')||"[]");
+        qe.push(d);
+        localStorage.setItem('q',JSON.stringify(qe));
+    }
+    
+    if(qV>2){
+        master=master.filter(i=>i.id!==cQ.id);
+        localStorage.setItem('c_q',JSON.stringify(master));
+        const bI=`badge-${cQ.topic.replace(/\s+/g,'')}`, bE=document.getElementById(bI);
+        if(bE){
+            const cC=parseInt(bE.innerText);
+            bE.innerText=Math.max(0,cC-1);
+        }
+    }
 
+    if(idx < topicQs.length - 1){
+        idx++;
+        loadQ();
+    } else {
+        // NEW ANIMATION LOGIC
+        sessionStorage.removeItem('lastTopic');
+        if(navigator.onLine) await _s.rpc('update_user_streak',{p_username:cur});
+        
+        const overlay = document.getElementById('finish-overlay');
+        overlay.style.display = 'flex'; // Show the tick
+        
+        setTimeout(() => {
+            overlay.style.display = 'none'; // Hide it after 1.5 seconds
+            handleHardwareBack(); // Go back to the topics list
+        }, 1500);
+    }
+}
 async function syncOffline(){const qe=JSON.parse(localStorage.getItem('q')||"[]");if(qe.length){for(let d of qe)await _s.rpc('handle_user_answer',d);await _s.rpc('update_user_streak',{p_username:cur});localStorage.removeItem('q');await fetchData()}}
 async function showLB(){const l=document.getElementById('leaderboard-list');l.innerHTML="Loading...";if(!navigator.onLine)return l.innerHTML="Online only";const{data}=await _s.from('leaderboard').select('*');l.innerHTML="";data.forEach((e,i)=>{const m=i===0?"🥇":i===1?"🥈":i===2?"🥉":`#${i+1}`;l.innerHTML+=`<div class="flex justify-between items-center p-4 bg-white rounded-2xl border-2 shadow-sm ${e.username===cur?'border-orange-500 bg-orange-50':'border-gray-100'}"><div><p class="font-bold uppercase tracking-tighter leading-none">${m} ${e.username}</p><p class="text-[9px] text-gray-400 uppercase mt-1 leading-none">${e.total_answered} Solved</p></div><p class="text-lg font-black text-orange-600">${e.streak_count}🔥</p></div>`})}
 function toggleSignupMode(s){document.getElementById('reg-fields').classList.toggle('hidden',!s);['signin-btn','signup-toggle'].forEach(i=>document.getElementById(i).classList.toggle('hidden',s));['signup-confirm','back-to-login'].forEach(i=>document.getElementById(i).classList.toggle('hidden',!s))}
