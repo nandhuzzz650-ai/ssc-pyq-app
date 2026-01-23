@@ -1,0 +1,17 @@
+{
+  "name": "Daily Intellect SSC PYQ",
+  "short_name": "SSC PYQS",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#D32F2F",
+  "description": "Personalized Learning System for SSC PYQs",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

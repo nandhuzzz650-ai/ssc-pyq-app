@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Daily Intellect SSC PYQ</title>
+<link rel="manifest" href="manifest.json">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+body{font-family:'Inter',sans-serif;background-color:#f3f4f6}.red-brand{background-color:#D32F2F}.option-btn{transition:all .2s;border:2px solid #e5e7eb;background:#fff}.correct{background-color:#def7ec!important;border-color:#31c48d!important;color:#03543f!important}.wrong{background-color:#fde8e8!important;border-color:#f05252!important;color:#9b1c1c!important}.switch{position:relative;display:inline-block;width:40px;height:20px}.switch input{opacity:0}.slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background-color:#ccc;transition:.4s;border-radius:34px}.slider:before{position:absolute;content:"";height:14px;width:14px;left:3px;bottom:3px;background-color:#fff;transition:.4s;border-radius:50%}input:checked+.slider{background-color:#4ade80}input:checked+.slider:before{transform:translateX(20px)}.animate-pop{animation:pop .3s cubic-bezier(.175,.885,.32,1.275)}@keyframes pop{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}#offline-indicator{display:none}body.is-offline #offline-indicator{display:flex}
+/* Timer Styles */
+#timer-display{font-variant-numeric: tabular-nums;}
+.timer-warn{color: #D32F2F; animation: pulse 1s infinite;}
+@keyframes pulse{0%{opacity:1}50%{opacity:0.5}100%{opacity:1}}
+</style>
+</head>
+<body class="pb-12">
+<div id="offline-indicator" class="fixed top-0 left-0 w-full bg-orange-600 text-white text-[10px] font-bold uppercase p-1 justify-center items-center z-[1000]">Offline - Progress will sync later</div>
+
+<div id="login-screen" class="fixed inset-0 bg-white z-[200] flex items-center justify-center p-6 overflow-y-auto">
+<div class="max-w-sm w-full text-center">
+<h1 class="text-4xl font-black mb-2 text-red-700 uppercase">Daily Intellect</h1>
+<p class="text-gray-400 mb-8 font-bold text-[10px] tracking-widest uppercase">Personalized Learning System</p>
+<div id="auth-box" class="space-y-2">
+<input type="text" id="username-input" class="w-full border-2 p-4 rounded-2xl text-center text-xl font-bold focus:border-red-500 outline-none" placeholder="Username">
+<input type="password" id="password-input" class="w-full border-2 p-4 rounded-2xl text-center text-xl font-bold focus:border-red-500 outline-none" placeholder="Password">
+<div id="reg-fields" class="hidden space-y-2 pt-2 text-left">
+<input type="text" id="recovery-q" class="w-full p-4 border-2 rounded-2xl text-sm" placeholder="Security Question">
+<input type="text" id="recovery-a" class="w-full p-4 border-2 rounded-2xl text-sm" placeholder="Your Answer">
+</div>
+<div class="pt-4 space-y-3">
+<button id="signin-btn" onclick="handleSignIn()" class="w-full red-brand text-white py-4 rounded-2xl font-bold shadow-lg uppercase tracking-widest">Sign In</button>
+<button id="signup-toggle" onclick="toggleSignupMode(true)" class="w-full bg-gray-100 text-gray-600 py-4 rounded-2xl font-bold uppercase text-xs">Create Account</button>
+<button id="signup-confirm" onclick="handleSignUp()" class="hidden w-full bg-black text-white py-4 rounded-2xl font-bold uppercase">Complete Sign Up</button>
+<button id="back-to-login" onclick="toggleSignupMode(false)" class="hidden mt-2 text-xs text-gray-400 font-bold uppercase">Back to Login</button>
+</div>
+</div>
+</div>
+</div>
+
+<nav class="red-brand text-white p-4 sticky top-0 z-50 flex justify-between items-center shadow-lg">
+<div><h1 class="text-[10px] font-black uppercase tracking-widest opacity-80 leading-none">Daily Intellect</h1><h2 class="text-lg font-black uppercase tracking-tighter">SSC PYQs</h2><p class="text-[9px] opacity-70 uppercase font-bold">User: <span id="display-user"></span></p></div>
+<div class="flex items-center gap-2">
+<button onclick="ss('leaderboard-screen');showLB()" class="bg-black/20 px-3 py-1.5 rounded-full text-[9px] font-black uppercase">🏆 Ranks</button>
+<button onclick="handleLogout()" class="bg-black/20 p-2 rounded-full"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg></button>
+<div class="bg-black/20 px-3 py-1.5 rounded-full flex items-center gap-2"><span class="text-[9px] font-black">SRS</span><label class="switch"><input type="checkbox" id="srs-toggle" checked onchange="fetchData()"><span class="slider"></span></label></div>
+</div>
+</nav>
+
+<main class="max-w-5xl mx-auto p-4">
+<section id="home-screen" class="hidden">
+<div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-black text-gray-800 uppercase">Topics</h2><div class="bg-orange-50 px-3 py-1 rounded-xl border border-orange-100 font-black text-orange-600 text-sm" id="home-streak-display">0 🔥</div></div>
+<div id="subject-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+</section>
+
+<section id="topic-screen" class="hidden">
+<div class="flex justify-between items-start mb-6"><div><h1 class="text-2xl font-black text-red-700 uppercase">Daily Intellect</h1><p class="text-[8px] tracking-widest uppercase">Personalized System</p></div><div class="bg-orange-50 px-4 py-2 rounded-2xl border border-orange-100 text-center"><p class="text-[10px] font-black text-orange-400 uppercase leading-none">Streak</p><p class="text-xl font-black text-orange-600 leading-tight mt-1"><span id="topic-streak-count">0</span> 🔥</p></div></div>
+<div class="flex justify-between items-center mb-6">
+    <button onclick="handleHardwareBack()" class="text-red-600 font-bold text-xs uppercase flex items-center gap-1">← Back</button>
+    <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border shadow-sm">
+        <span class="text-[10px] font-black uppercase text-gray-400">⏱️ Set Timer:</span>
+        <input type="range" id="timer-range" oninput="updateTimerLabel(this.value)" class="w-20 accent-red-600">
+        <span id="timer-label" class="text-xs font-bold text-red-700 w-8 text-center">0s</span>
+    </div>
+</div>
+<h2 id="current-subject-title" class="text-3xl font-black mb-8 text-gray-800 leading-tight"></h2>
+<div id="topic-list" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+</section>
+
+<section id="quiz-screen" class="hidden">
+<div class="max-w-2xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+        <button onclick="handleHardwareBack()" class="flex items-center gap-1 text-red-600 font-bold text-xs uppercase"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg> Exit</button>
+        <div id="timer-box" class="flex flex-col items-center">
+            <span id="timer-display" class="text-2xl font-black text-gray-800 tabular-nums">00</span>
+            <span class="text-[8px] font-black uppercase text-gray-400 tracking-widest">Seconds Left</span>
+        </div>
+        <div id="progress-text" class="bg-gray-100 px-3 py-1 rounded-full text-[10px] font-black text-gray-500 uppercase"></div>
+    </div>
+<div class="bg-white p-6 md:p-10 rounded-3xl shadow-xl border border-gray-50"><h3 id="question-text" class="text-xl font-bold mb-8 text-gray-800"></h3><div id="options-grid" class="space-y-3"></div>
+<div id="srs-actions" class="hidden mt-8 grid grid-cols-3 gap-2 text-center">
+<button onclick="submitReview(2)" class="bg-gray-100 p-3 rounded-xl"><span class="block font-black text-[10px] uppercase text-gray-500">Hard</span><span id="time-hard" class="text-[9px] text-gray-400">Loop</span></button>
+<button onclick="submitReview(4)" class="bg-blue-50 p-3 rounded-xl border border-blue-100"><span class="block font-black text-[10px] text-blue-500 uppercase">Good</span><span id="time-good" class="text-[9px] text-blue-400"></span></button>
+<button onclick="submitReview(5)" class="bg-green-50 p-3 rounded-xl border border-green-100"><span class="block font-black text-[10px] text-green-500 uppercase">Easy</span><span id="time-easy" class="text-[9px] text-green-400"></span></button>
+</div>
+</div>
+</div>
+</section>
+
+<section id="leaderboard-screen" class="hidden"><button onclick="handleHardwareBack()" class="mb-6 text-red-600 font-bold text-xs uppercase">← Back</button><h2 class="text-3xl font-black mb-6 text-gray-800 uppercase">Global Rankings</h2><div id="leaderboard-list" class="space-y-3"></div></section>
+</main>
+
+<script>
+const SU='https://lkwciklwwssrwzgecrvv.supabase.co',SK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxrd2Npa2x3d3Nzcnd6Z2VjcnZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5NjAwNjYsImV4cCI6MjA4NDUzNjA2Nn0.l-M24USVWXR_WOJLP0vP3MtXfCsllU9n1VXOau9JN8A',_s=supabase.createClient(SU,SK);
+let cur=localStorage.getItem('dailyIntellectUser')||"",master=[],topicQs=[],idx=0;
+let timerInterval, timeLeft, currentSubject;
+
+const syl={
+    "Quantitative Aptitude":["Computation of whole numbers","Decimals","Fractions","Relationships between numbers","Profit and Loss","Discount","Partnership Business","Mixture and Alligation","Time and distance","Time & Work","Percentage","Ratio & Proportion","Square roots","Averages","Interest","Basic algebraic identities","Graphs of Linear Equations","Triangle and various kinds of centres","Congruence and similarity of triangles","Circle and its chords, tangents, etc.","Triangle","Quadrilaterals","Regular Polygons","Right Prism","Right Circular Cone","Right Circular Cylinder","Sphere","Heights and Distances","Histogram","Frequency polygon","Bar diagram & Pie chart","Hemispheres","Rectangular Parallelepiped","Regular Right Pyramid","Trigonometric ratio","Degree and Radian Measures","Standard Identities","Complementary angles"],
+    "General Intelligence and Reasoning":["Analogies","Similarities and differences","Space visualization","Spatial orientation","Problem-solving","Analysis","Judgment","Blood Relations","Decision making","Visual memory","Discrimination","Observation","Relationship concepts","Arithmetical reasoning","Figural classification","Arithmetic number series","Non-verbal series","Coding and decoding","Statement conclusion","Syllogistic reasoning"],
+    "English Comprehension":["Idioms and Phrases","One word Substitution","Sentence Correction","Error Spotting","Fill in the Blanks","Spellings Correction","Reading Comprehension","Synonyms-Antonyms","Active Passive","Sentence Rearrangement","Sentence Improvement","Cloze test"],
+    "General Awareness":["History","Culture","Geography","Economic Scene","General Policy","Scientific Research","Science","Current Affairs","Books and Authors","Sports","Important Schemes","Important Days","Portfolio","People in News","Static GK"]
+};
+
+// Timer ranges based on your request
+const timerRanges = {
+    "Quantitative Aptitude": {min: 40, max: 60},
+    "General Intelligence and Reasoning": {min: 20, max: 30},
+    "English Comprehension": {min: 20, max: 30},
+    "General Awareness": {min: 10, max: 20}
+};
+
+if('serviceWorker' in navigator){
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('SW Registered'))
+        .catch(err => console.log('SW Registration failed'));
+    });
+}
+
+window.addEventListener('online',()=>{document.body.classList.remove('is-offline');syncOffline()});
+window.addEventListener('offline',()=>document.body.classList.add('is-offline'));
+
+window.onload=async function(){
+    if(cur){
+        await app();
+        const lastHash=window.location.hash.replace('#','');
+        const lastSub=sessionStorage.getItem('lastSub');
+        const lastTopic=sessionStorage.getItem('lastTopic');
+        if(lastHash==='quiz-screen'&&lastTopic){
+            const qs=master.filter(q=>q.topic===lastTopic);
+            if(qs.length>0)startPractice(qs,true);
+            else ss('home-screen');
+        }else if(lastHash==='topic-screen'&&lastSub){
+            openSubject(lastSub);ss('topic-screen');
+        }else if(lastHash&&lastHash!=='login-screen'){
+            rs(lastHash);
+        }else{
+            ss('home-screen');
+        }
+    }
+};
+
+window.onpopstate=function(e){if(e.state&&e.state.sid)rs(e.state.sid);else rs('home-screen')};
+function ss(id){window.history.pushState({sid:id},"",`#${id}`);rs(id)}
+function rs(id){
+    clearInterval(timerInterval); // Stop timer when switching screens
+    ['login-screen','home-screen','topic-screen','quiz-screen','leaderboard-screen'].forEach(s=>{const el=document.getElementById(s);if(el)el.classList.add('hidden')});
+    document.getElementById(id).classList.remove('hidden');
+}
+function handleHardwareBack(){window.history.back();setTimeout(fetchData,100)}
+function handleLogout(){localStorage.clear();sessionStorage.clear();window.location.hash="";location.reload()}
+
+async function handleSignIn(){const u=document.getElementById('username-input').value.trim().toLowerCase(),p=document.getElementById('password-input').value.trim();if(!u||!p)return alert("Fill all fields");const b=document.getElementById('signin-btn');b.innerText="Connecting...";try{const{data,error}=await _s.from('users').select('*').eq('username',u).maybeSingle();if(data&&data.password===p){cur=u;localStorage.setItem('dailyIntellectUser',u);await app();ss('home-screen')}else alert("Invalid Login")}catch(e){alert(e.message)}finally{b.innerText="Sign In"}}
+async function handleSignUp(){const u=document.getElementById('username-input').value.trim().toLowerCase(),p=document.getElementById('password-input').value.trim(),q=document.getElementById('recovery-q').value.trim(),a=document.getElementById('recovery-a').value.trim().toLowerCase();const{error}=await _s.from('users').insert([{username:u,password:p,recovery_question:q,recovery_answer:a}]);if(error)return alert("Taken");cur=u;localStorage.setItem('dailyIntellectUser',u);await app();ss('home-screen')}
+
+async function app(){
+    document.getElementById('display-user').innerText=cur;
+    document.getElementById('login-screen').classList.add('hidden');
+    loadLocalData();
+    renderHome();
+    const cS=localStorage.getItem(`s_${cur}`);
+    if(cS)upUI(parseInt(cS));
+    if(navigator.onLine) {
+        try { 
+            await syncOffline(); 
+            const{data}=await _s.from('users').select('streak_count').eq('username',cur).maybeSingle();
+            if(data){localStorage.setItem(`s_${cur}`,data.streak_count);upUI(data.streak_count)}
+            await fetchData(); 
+        } catch(e) { console.log('Background sync skipped'); }
+    }
+}
+
+function upUI(s){document.getElementById('topic-streak-count').innerText=s;document.getElementById('home-streak-display').innerText=`${s} 🔥`}
+
+async function fetchData(){
+    if(navigator.onLine){
+        const isS=document.getElementById('srs-toggle').checked;
+        try {
+            let res=isS?await _s.rpc('get_due_questions',{user_name:cur}):await _s.from('questions').select('*');
+            if(res.data) {
+                master=res.data;
+                localStorage.setItem('c_q',JSON.stringify(master));
+                renderHome(); 
+            }
+        } catch(e) { console.log('Database unreachable'); }
+    }
+}
+
+function loadLocalData(){
+    const c=localStorage.getItem('c_q');
+    if(c) master=JSON.parse(c);
+}
+
+function renderHome(){const g=document.getElementById('subject-grid');g.innerHTML="";Object.keys(syl).forEach(s=>{const c=master.filter(q=>syl[s].includes(q.topic)).length;g.innerHTML+=`<div onclick="ss('topic-screen');openSubject('${s}')" class="bg-white p-6 rounded-2xl border-2 border-gray-100 cursor-pointer shadow-lg hover:border-red-500 transition"><h3 class="font-black">${s}</h3><p class="text-[10px] text-gray-400 font-bold uppercase mt-1 tracking-widest leading-none">${c} Due</p></div>`})}
+
+// Timer Slider Logic
+function updateTimerLabel(val) {
+    document.getElementById('timer-label').innerText = val + 's';
+    localStorage.setItem(`t_${currentSubject}`, val);
+}
+
+function openSubject(s){
+    currentSubject = s;
+    sessionStorage.setItem('lastSub',s);
+    document.getElementById('current-subject-title').innerText=s;
+    
+    // Configure Slider
+    const range = timerRanges[s] || {min: 10, max: 30};
+    const slider = document.getElementById('timer-range');
+    slider.min = range.min;
+    slider.max = range.max;
+    
+    // Load saved value or default to min
+    const saved = localStorage.getItem(`t_${s}`) || range.min;
+    slider.value = saved;
+    updateTimerLabel(saved);
+
+    const l=document.getElementById('topic-list');l.innerHTML="";
+    syl[s].forEach(t=>{const c=master.filter(q=>q.topic===t).length;l.innerHTML+=`<div onclick="startPractice(master.filter(q=>q.topic==='${t}'))" class="bg-white p-4 rounded-xl border flex justify-between items-center shadow-sm cursor-pointer hover:bg-red-50"><span class="font-bold text-gray-700">${t}</span><span id="badge-${t.replace(/\s+/g,'')}" class="text-xs font-black bg-red-100 text-red-700 px-2 py-1 rounded">${c}</span></div>`})}
+
+function startPractice(qs,res=false){
+    if(qs.length===0)return res?null:alert("No questions!");
+    topicQs=[...qs];
+    for(let i=topicQs.length-1;i>0;i--){
+        const j=Math.floor(Math.random()*(i+1));
+        [topicQs[i],topicQs[j]]=[topicQs[j],topicQs[i]];
+    }
+    idx=0;sessionStorage.setItem('lastTopic',topicQs[0].topic);ss('quiz-screen');loadQ()}
+
+// Countdown Timer Engine
+function startTimer() {
+    clearInterval(timerInterval);
+    const setTime = parseInt(localStorage.getItem(`t_${currentSubject}`)) || 15;
+    timeLeft = setTime;
+    const display = document.getElementById('timer-display');
+    display.classList.remove('timer-warn');
+    display.innerText = timeLeft;
+
+    timerInterval = setInterval(() => {
+        timeLeft--;
+        display.innerText = timeLeft < 10 ? "0" + timeLeft : timeLeft;
+        
+        if(timeLeft <= 5) display.classList.add('timer-warn');
+        
+        if(timeLeft <= 0) {
+            clearInterval(timerInterval);
+            handleTimeUp();
+        }
+    }, 1000);
+}
+
+function handleTimeUp() {
+    // Automatically select a "wrong" state or just highlight correct answer
+    const q = topicQs[idx];
+    const b = document.querySelectorAll('.option-btn');
+    b.forEach(btn => btn.disabled = true);
+    b[q.correct].classList.add('correct');
+    document.getElementById('srs-actions').classList.remove('hidden');
+}
+
+async function loadQ(){
+    const q=topicQs[idx];
+    document.getElementById('progress-text').innerText=`${idx+1}/${topicQs.length}`;
+    document.getElementById('question-text').innerText=q.q_text||q.q;
+    document.getElementById('srs-actions').classList.add('hidden');
+    const g=document.getElementById('options-grid');
+    g.innerHTML="";
+    q.options.forEach((o,i)=>{g.innerHTML+=`<button onclick="checkAns(${i},${q.correct})" class="option-btn w-full p-4 rounded-xl text-left font-bold text-sm shadow-sm text-gray-800">${o}</button>`});
+    
+    startTimer(); // Start countdown when question loads
+    if(document.getElementById('srs-toggle').checked)await labels(q.id);
+}
+
+async function labels(id){const cK=`l_${cur}_${id}`;if(!navigator.onLine){const c=localStorage.getItem(cK);if(c){const d=JSON.parse(c);document.getElementById('time-good').innerText=d.g+"d";document.getElementById('time-easy').innerText=d.e+"d";return}}try{const{data:u}=await _s.from('user_progress').select('*').eq('username',cur).eq('question_id',id).maybeSingle();const ef=u?.ease_factor||2.5,iv=u?.interval||0,reps=u?.repetitions||0,g=reps===0?1:(reps===1?4:Math.round(iv*ef)),e=Math.round((iv||1)*(ef+0.15)*1.3);document.getElementById('time-good').innerText=g+"d";document.getElementById('time-easy').innerText=e+"d";localStorage.setItem(cK,JSON.stringify({g,e}))}catch(e){}}
+
+function checkAns(i,c){
+    clearInterval(timerInterval); // Stop timer when user clicks
+    const b=document.querySelectorAll('.option-btn');
+    b.forEach(btn=>btn.disabled=true);
+    if(i===c)b[i].classList.add('correct');
+    else{b[i].classList.add('wrong');b[c].classList.add('correct')}
+    document.getElementById('srs-actions').classList.remove('hidden');
+}
+
+async function submitReview(qV){
+    clearInterval(timerInterval);
+    const cQ=topicQs[idx],d={p_username:cur,p_question_id:cQ.id,p_quality:qV};
+    if(navigator.onLine)await _s.rpc('handle_user_answer',d);
+    else{const qe=JSON.parse(localStorage.getItem('q')||"[]");qe.push(d);localStorage.setItem('q',JSON.stringify(qe))}
+    if(qV>2){master=master.filter(i=>i.id!==cQ.id);localStorage.setItem('c_q',JSON.stringify(master));const bI=`badge-${cQ.topic.replace(/\s+/g,'')}`,bE=document.getElementById(bI);if(bE){const cC=parseInt(bE.innerText);bE.innerText=Math.max(0,cC-1)}}
+    if(idx<topicQs.length-1){idx++;loadQ()}else{sessionStorage.removeItem('lastTopic');if(navigator.onLine)await _s.rpc('update_user_streak',{p_username:cur});alert("Finished!");handleHardwareBack()}
+}
+
+async function syncOffline(){const qe=JSON.parse(localStorage.getItem('q')||"[]");if(qe.length){for(let d of qe)await _s.rpc('handle_user_answer',d);await _s.rpc('update_user_streak',{p_username:cur});localStorage.removeItem('q');await fetchData()}}
+async function showLB(){const l=document.getElementById('leaderboard-list');l.innerHTML="Loading...";if(!navigator.onLine)return l.innerHTML="Online only";const{data}=await _s.from('leaderboard').select('*');l.innerHTML="";data.forEach((e,i)=>{const m=i===0?"🥇":i===1?"🥈":i===2?"🥉":`#${i+1}`;l.innerHTML+=`<div class="flex justify-between items-center p-4 bg-white rounded-2xl border-2 shadow-sm ${e.username===cur?'border-orange-500 bg-orange-50':'border-gray-100'}"><div><p class="font-bold uppercase tracking-tighter leading-none">${m} ${e.username}</p><p class="text-[9px] text-gray-400 uppercase mt-1 leading-none">${e.total_answered} Solved</p></div><p class="text-lg font-black text-orange-600">${e.streak_count}🔥</p></div>`})}
+function toggleSignupMode(s){document.getElementById('reg-fields').classList.toggle('hidden',!s);['signin-btn','signup-toggle'].forEach(i=>document.getElementById(i).classList.toggle('hidden',s));['signup-confirm','back-to-login'].forEach(i=>document.getElementById(i).classList.toggle('hidden',!s))}
+</script>
+</body>
+</html>
