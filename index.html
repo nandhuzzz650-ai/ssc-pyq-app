@@ -13,6 +13,15 @@ body{font-family:'Inter',sans-serif;background-color:#f3f4f6}.red-brand{backgrou
 #timer-display{font-variant-numeric: tabular-nums;}
 .timer-warn{color: #D32F2F; animation: pulse 1s infinite;}
 @keyframes pulse{0%{opacity:1}50%{opacity:0.5}100%{opacity:1}}
+
+/* New Streak Animation Styles */
+@keyframes streak-glow {
+    0% { transform: scale(1); filter: drop-shadow(0 0 0px #f97316); }
+    50% { transform: scale(1.3); filter: drop-shadow(0 0 15px #f97316); }
+    100% { transform: scale(1); filter: drop-shadow(0 0 0px #f97316); }
+}
+.streak-active { animation: streak-glow 0.8s ease-in-out 3; }
+
 #finish-overlay {
     display: none;
     position: fixed;
@@ -104,12 +113,12 @@ body{font-family:'Inter',sans-serif;background-color:#f3f4f6}.red-brand{backgrou
 
 <main class="max-w-5xl mx-auto p-4">
 <section id="home-screen" class="hidden">
-<div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-black text-gray-800 uppercase">Topics</h2><div class="bg-orange-50 px-3 py-1 rounded-xl border border-orange-100 font-black text-orange-600 text-sm" id="home-streak-display">0 🔥</div></div>
+<div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-black text-gray-800 uppercase">Topics</h2><div class="bg-orange-50 px-3 py-1 rounded-xl border border-orange-100 font-black text-orange-600 text-sm transition-all" id="home-streak-display">0 🔥</div></div>
 <div id="subject-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
 </section>
 
 <section id="topic-screen" class="hidden">
-<div class="flex justify-between items-start mb-6"><div><h1 class="text-2xl font-black text-red-700 uppercase">Daily Intellect</h1><p class="text-[8px] tracking-widest uppercase">Personalized System</p></div><div class="bg-orange-50 px-4 py-2 rounded-2xl border border-orange-100 text-center"><p class="text-[10px] font-black text-orange-400 uppercase leading-none">Streak</p><p class="text-xl font-black text-orange-600 leading-tight mt-1"><span id="topic-streak-count">0</span> 🔥</p></div></div>
+<div class="flex justify-between items-start mb-6"><div><h1 class="text-2xl font-black text-red-700 uppercase">Daily Intellect</h1><p class="text-[8px] tracking-widest uppercase">Personalized System</p></div><div class="bg-orange-50 px-4 py-2 rounded-2xl border border-orange-100 text-center" id="topic-streak-box"><p class="text-[10px] font-black text-orange-400 uppercase leading-none">Streak</p><p class="text-xl font-black text-orange-600 leading-tight mt-1"><span id="topic-streak-count">0</span> 🔥</p></div></div>
 <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
     <button onclick="handleHardwareBack()" class="text-red-600 font-bold text-xs uppercase flex items-center gap-1">← Back</button>
 <div class="flex items-center gap-4 bg-white px-3 py-2 rounded-xl border shadow-sm">
@@ -257,19 +266,45 @@ async function app(){
     document.getElementById('login-screen').classList.add('hidden');
     loadLocalData();
     renderHome();
-    const cS=localStorage.getItem(`s_${cur}`);
-    if(cS)upUI(parseInt(cS));
+    
+    const oldStreak = parseInt(localStorage.getItem(`s_${cur}`)) || 0;
+    upUI(oldStreak);
+    
     if(navigator.onLine) {
         try { 
             await syncOffline(); 
+            await _s.rpc('update_user_streak',{p_username:cur});
             const{data}=await _s.from('users').select('streak_count').eq('username',cur).maybeSingle();
-            if(data){localStorage.setItem(`s_${cur}`,data.streak_count);upUI(data.streak_count)}
+            
+            if(data){
+                const newStreak = data.streak_count;
+                localStorage.setItem(`s_${cur}`, newStreak);
+                upUI(newStreak);
+                
+                // Trigger Animation if streak increased
+                if(newStreak > oldStreak) {
+                    triggerStreakAnimation();
+                }
+            }
             await fetchData(); 
         } catch(e) { console.log('Background sync skipped'); }
     }
 }
 
-function upUI(s){document.getElementById('topic-streak-count').innerText=s;document.getElementById('home-streak-display').innerText=`${s} 🔥`}
+function triggerStreakAnimation() {
+    const displays = [document.getElementById('home-streak-display'), document.getElementById('topic-streak-box')];
+    displays.forEach(el => {
+        if(el) {
+            el.classList.add('streak-active');
+            setTimeout(() => el.classList.remove('streak-active'), 2500);
+        }
+    });
+}
+
+function upUI(s){
+    document.getElementById('topic-streak-count').innerText=s;
+    document.getElementById('home-streak-display').innerText=`${s} 🔥`;
+}
 
 function handleSRSToggle(checked) {
     localStorage.setItem('srs_enabled', checked);
@@ -567,7 +602,6 @@ async function submitReview(qV){
         sessionStorage.removeItem('lastTopic');
         if (!isSearchActive) {
             localStorage.removeItem(`lastIdx_${cur}_${cQ.topic}`);
-            if(navigator.onLine) await _s.rpc('update_user_streak',{p_username:cur});
         }
         const overlay = document.getElementById('finish-overlay');
         overlay.style.display = 'flex'; 
