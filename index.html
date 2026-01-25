@@ -10,11 +10,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
 body{font-family:'Inter',sans-serif;background-color:#f3f4f6}.red-brand{background-color:#D32F2F}.option-btn{transition:all .2s;border:2px solid #e5e7eb;background:#fff}.correct{background-color:#def7ec!important;border-color:#31c48d!important;color:#03543f!important}.wrong{background-color:#fde8e8!important;border-color:#f05252!important;color:#9b1c1c!important}.switch{position:relative;display:inline-block;width:40px;height:20px}.switch input{opacity:0}.slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background-color:#ccc;transition:.4s;border-radius:34px}.slider:before{position:absolute;content:"";height:14px;width:14px;left:3px;bottom:3px;background-color:#fff;transition:.4s;border-radius:50%}input:checked+.slider{background-color:#4ade80}input:checked+.slider:before{transform:translateX(20px)}.animate-pop{animation:pop .3s cubic-bezier(.175,.885,.32,1.275)}@keyframes pop{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}#offline-indicator{display:none}body.is-offline #offline-indicator{display:flex}
-/* Timer Styles */
 #timer-display{font-variant-numeric: tabular-nums;}
 .timer-warn{color: #D32F2F; animation: pulse 1s infinite;}
 @keyframes pulse{0%{opacity:1}50%{opacity:0.5}100%{opacity:1}}
-/* Finish Overlay Styles */
 #finish-overlay {
     display: none;
     position: fixed;
@@ -45,11 +43,8 @@ body{font-family:'Inter',sans-serif;background-color:#f3f4f6}.red-brand{backgrou
 @keyframes stroke { 100% { stroke-dashoffset: 0; } }
 @keyframes scale { 0%, 100% { transform: none; } 50% { transform: scale3d(1.1, 1.1, 1); } }
 @keyframes fill { 100% { box-shadow: inset 0px 0px 0px 40px #31c48d; } }
-/* Timer Toggle Colors */
-#timer-master-toggle + .slider { background-color: #f05252; } /* Red when off */
-#timer-master-toggle:checked + .slider { background-color: #31c48d; } /* Green when on */
-
-/* Explanation Box Style */
+#timer-master-toggle + .slider { background-color: #f05252; }
+#timer-master-toggle:checked + .slider { background-color: #31c48d; }
 .explanation-box {
     margin-top: 1rem;
     padding: 1rem;
@@ -100,7 +95,10 @@ body{font-family:'Inter',sans-serif;background-color:#f3f4f6}.red-brand{backgrou
 <div class="flex items-center gap-2">
 <button onclick="ss('leaderboard-screen');showLB()" class="bg-black/20 px-3 py-1.5 rounded-full text-[9px] font-black uppercase">🏆 Ranks</button>
 <button onclick="handleLogout()" class="bg-black/20 p-2 rounded-full"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg></button>
-<div class="bg-black/20 px-3 py-1.5 rounded-full flex items-center gap-2"><span class="text-[9px] font-black">SRS</span><label class="switch"><input type="checkbox" id="srs-toggle" checked onchange="fetchData()"><span class="slider"></span></label></div>
+<div id="nav-srs-container" class="bg-black/20 px-3 py-1.5 rounded-full flex items-center gap-2">
+    <span class="text-[9px] font-black uppercase tracking-tighter">Spaced Repetition</span>
+    <label class="switch"><input type="checkbox" id="nav-srs-toggle" checked onchange="handleSRSToggle(this.checked)"><span class="slider"></span></label>
+</div>
 </div>
 </nav>
 
@@ -112,7 +110,7 @@ body{font-family:'Inter',sans-serif;background-color:#f3f4f6}.red-brand{backgrou
 
 <section id="topic-screen" class="hidden">
 <div class="flex justify-between items-start mb-6"><div><h1 class="text-2xl font-black text-red-700 uppercase">Daily Intellect</h1><p class="text-[8px] tracking-widest uppercase">Personalized System</p></div><div class="bg-orange-50 px-4 py-2 rounded-2xl border border-orange-100 text-center"><p class="text-[10px] font-black text-orange-400 uppercase leading-none">Streak</p><p class="text-xl font-black text-orange-600 leading-tight mt-1"><span id="topic-streak-count">0</span> 🔥</p></div></div>
-<div class="flex justify-between items-center mb-6">
+<div class="flex flex-wrap justify-between items-center mb-6 gap-4">
     <button onclick="handleHardwareBack()" class="text-red-600 font-bold text-xs uppercase flex items-center gap-1">← Back</button>
 <div class="flex items-center gap-4 bg-white px-3 py-2 rounded-xl border shadow-sm">
     <div class="flex items-center gap-2">
@@ -127,7 +125,17 @@ body{font-family:'Inter',sans-serif;background-color:#f3f4f6}.red-brand{backgrou
         <input type="range" id="timer-range" oninput="updateTimerLabel(this.value)" class="w-20 accent-red-600">
     </div>
 </div>
+</div>
+
+<div id="search-container" class="mb-6">
+    <div class="relative">
+        <input type="text" id="topic-search-input" oninput="filterTopics()" placeholder="Search in questions & options..." class="w-full bg-white border-2 border-gray-100 p-3 rounded-xl text-sm font-bold focus:border-red-500 outline-none pr-10">
+        <div class="absolute right-3 top-3 text-gray-400">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        </div>
     </div>
+</div>
+
 <h2 id="current-subject-title" class="text-3xl font-black mb-8 text-gray-800 leading-tight"></h2>
 <div id="topic-list" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
 </section>
@@ -143,10 +151,21 @@ body{font-family:'Inter',sans-serif;background-color:#f3f4f6}.red-brand{backgrou
         <div id="progress-text" class="bg-gray-100 px-3 py-1 rounded-full text-[10px] font-black text-gray-500 uppercase"></div>
     </div>
 <div class="bg-white p-6 md:p-10 rounded-3xl shadow-xl border border-gray-50"><h3 id="question-text" class="text-xl font-bold mb-8 text-gray-800"></h3><div id="options-grid" class="space-y-3"></div>
-<div id="srs-actions" class="hidden mt-8 grid grid-cols-3 gap-2 text-center">
-<button onclick="submitReview(2)" class="bg-gray-100 p-3 rounded-xl"><span class="block font-black text-[10px] uppercase text-gray-500">Hard</span><span id="time-hard" class="text-[9px] text-gray-400">Loop</span></button>
-<button onclick="submitReview(4)" class="bg-blue-50 p-3 rounded-xl border border-blue-100"><span class="block font-black text-[10px] text-blue-500 uppercase">Good</span><span id="time-good" class="text-[9px] text-blue-400"></span></button>
-<button onclick="submitReview(5)" class="bg-green-50 p-3 rounded-xl border border-green-100"><span class="block font-black text-[10px] text-green-500 uppercase">Easy</span><span id="time-easy" class="text-[9px] text-green-400"></span></button>
+
+<div id="non-srs-nav" class="hidden mt-8 flex justify-between gap-4">
+    <button onclick="navPrev()" class="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-bold uppercase text-xs">Previous</button>
+    <button onclick="navNext()" class="flex-1 bg-red-600 text-white py-3 rounded-xl font-bold uppercase text-xs">Next</button>
+</div>
+
+<div id="srs-actions" class="hidden mt-8">
+    <div id="srs-rating-buttons" class="grid grid-cols-3 gap-2 text-center">
+        <button onclick="submitReview(2)" class="bg-gray-100 p-3 rounded-xl"><span class="block font-black text-[10px] uppercase text-gray-500">Hard</span><span id="time-hard" class="text-[9px] text-gray-400">Loop</span></button>
+        <button onclick="submitReview(4)" class="bg-blue-50 p-3 rounded-xl border border-blue-100"><span class="block font-black text-[10px] text-blue-500 uppercase">Good</span><span id="time-good" class="text-[9px] text-blue-400"></span></button>
+        <button onclick="submitReview(5)" class="bg-green-50 p-3 rounded-xl border border-green-100"><span class="block font-black text-[10px] text-green-500 uppercase">Easy</span><span id="time-easy" class="text-[9px] text-green-400"></span></button>
+    </div>
+    <div id="srs-next-container" class="hidden">
+        <button onclick="submitReview(4)" class="w-full bg-red-600 text-white py-4 rounded-xl font-bold uppercase text-sm shadow-lg">Next Question</button>
+    </div>
 </div>
 </div>
 </div>
@@ -159,6 +178,7 @@ body{font-family:'Inter',sans-serif;background-color:#f3f4f6}.red-brand{backgrou
 const SU='https://lkwciklwwssrwzgecrvv.supabase.co',SK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxrd2Npa2x3d3Nzcnd6Z2VjcnZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5NjAwNjYsImV4cCI6MjA4NDUzNjA2Nn0.l-M24USVWXR_WOJLP0vP3MtXfCsllU9n1VXOau9JN8A',_s=supabase.createClient(SU,SK);
 let cur=localStorage.getItem('dailyIntellectUser')||"",master=[],topicQs=[],idx=0;
 let timerInterval, timeLeft, currentSubject;
+let isSearchActive = false;
 
 const syl={
     "Quantitative Aptitude":["Computation of whole numbers","Decimals","Fractions","Relationships between numbers","Profit and Loss","Discount","Partnership Business","Mixture and Alligation","Time and distance","Time & Work","Percentage","Ratio & Proportion","Square roots","Averages","Interest","Basic algebraic identities","Graphs of Linear Equations","Triangle and various kinds of centres","Congruence and similarity of triangles","Circle and its chords, tangents, etc.","Triangle","Quadrilaterals","Regular Polygons","Right Prism","Right Circular Cone","Right Circular Cylinder","Sphere","Heights and Distances","Histogram","Frequency polygon","Bar diagram & Pie chart","Hemispheres","Rectangular Parallelepiped","Regular Right Pyramid","Trigonometric ratio","Degree and Radian Measures","Standard Identities","Complementary angles"],
@@ -191,9 +211,10 @@ window.onload=async function(){
         const lastHash=window.location.hash.replace('#','');
         const lastSub=sessionStorage.getItem('lastSub');
         const lastTopic=sessionStorage.getItem('lastTopic');
+        
         if(lastHash==='quiz-screen'&&lastTopic){
             const qs=master.filter(q=>q.topic===lastTopic);
-            if(qs.length>0)startPractice(qs,true);
+            if(qs.length>0) startPractice(qs, true); 
             else ss('home-screen');
         }else if(lastHash==='topic-screen'&&lastSub){
             openSubject(lastSub);ss('topic-screen');
@@ -207,12 +228,25 @@ window.onload=async function(){
 
 window.onpopstate=function(e){if(e.state&&e.state.sid)rs(e.state.sid);else rs('home-screen')};
 function ss(id){window.history.pushState({sid:id},"",`#${id}`);rs(id)}
+
 function rs(id){
     clearInterval(timerInterval); 
     ['login-screen','home-screen','topic-screen','quiz-screen','leaderboard-screen'].forEach(s=>{const el=document.getElementById(s);if(el)el.classList.add('hidden')});
-    document.getElementById(id).classList.remove('hidden');
+    const target = document.getElementById(id);
+    if(target) target.classList.remove('hidden');
+    
+    const srsBtn = document.getElementById('nav-srs-container');
+    if(srsBtn) {
+        if(id === 'home-screen' || id === 'topic-screen') srsBtn.classList.remove('hidden');
+        else srsBtn.classList.add('hidden');
+    }
 }
-function handleHardwareBack(){window.history.back();setTimeout(fetchData,100)}
+
+function handleHardwareBack(){
+    window.history.back();
+    setTimeout(fetchData,100);
+}
+
 function handleLogout(){localStorage.clear();sessionStorage.clear();window.location.hash="";location.reload()}
 
 async function handleSignIn(){const u=document.getElementById('username-input').value.trim().toLowerCase(),p=document.getElementById('password-input').value.trim();if(!u||!p)return alert("Fill all fields");const b=document.getElementById('signin-btn');b.innerText="Connecting...";try{const{data,error}=await _s.from('users').select('*').eq('username',u).maybeSingle();if(data&&data.password===p){cur=u;localStorage.setItem('dailyIntellectUser',u);await app();ss('home-screen')}else alert("Invalid Login")}catch(e){alert(e.message)}finally{b.innerText="Sign In"}}
@@ -237,15 +271,24 @@ async function app(){
 
 function upUI(s){document.getElementById('topic-streak-count').innerText=s;document.getElementById('home-streak-display').innerText=`${s} 🔥`}
 
+function handleSRSToggle(checked) {
+    localStorage.setItem('srs_enabled', checked);
+    fetchData();
+}
+
 async function fetchData(){
     if(navigator.onLine){
-        const isS=document.getElementById('srs-toggle').checked;
+        const isS = localStorage.getItem('srs_enabled') !== 'false';
+        document.getElementById('nav-srs-toggle').checked = isS;
         try {
             let res=isS?await _s.rpc('get_due_questions',{user_name:cur}):await _s.from('questions').select('*');
             if(res.data) {
                 master=res.data;
                 localStorage.setItem('c_q',JSON.stringify(master));
                 renderHome(); 
+                if(document.getElementById('topic-screen').classList.contains('hidden') === false) {
+                    openSubject(currentSubject);
+                }
             }
         } catch(e) { console.log('Database unreachable'); }
     }
@@ -254,6 +297,8 @@ async function fetchData(){
 function loadLocalData(){
     const c=localStorage.getItem('c_q');
     if(c) master=JSON.parse(c);
+    const isS = localStorage.getItem('srs_enabled') !== 'false';
+    document.getElementById('nav-srs-toggle').checked = isS;
 }
 
 function renderHome(){const g=document.getElementById('subject-grid');g.innerHTML="";Object.keys(syl).forEach(s=>{const c=master.filter(q=>syl[s].includes(q.topic)).length;g.innerHTML+=`<div onclick="ss('topic-screen');openSubject('${s}')" class="bg-white p-6 rounded-2xl border-2 border-gray-100 cursor-pointer shadow-lg hover:border-red-500 transition"><h3 class="font-black">${s}</h3><p class="text-[10px] text-gray-400 font-bold uppercase mt-1 tracking-widest leading-none">${c} Due</p></div>`})}
@@ -272,27 +317,115 @@ function openSubject(s){
     currentSubject = s;
     sessionStorage.setItem('lastSub',s);
     document.getElementById('current-subject-title').innerText=s;
-    
+    document.getElementById('topic-search-input').value = ""; 
     const range = timerRanges[s] || {min: 10, max: 30};
     const slider = document.getElementById('timer-range');
     slider.min = range.min;
     slider.max = range.max;
-    
     const saved = localStorage.getItem(`t_${s}`) || range.min;
     slider.value = saved;
     updateTimerLabel(saved);
+    renderTopics();
+}
 
-    const l=document.getElementById('topic-list');l.innerHTML="";
-    syl[s].forEach(t=>{const c=master.filter(q=>q.topic===t).length;l.innerHTML+=`<div onclick="startPractice(master.filter(q=>q.topic==='${t}'))" class="bg-white p-4 rounded-xl border flex justify-between items-center shadow-sm cursor-pointer hover:bg-red-50"><span class="font-bold text-gray-700">${t}</span><span id="badge-${t.replace(/\s+/g,'')}" class="text-xs font-black bg-red-100 text-red-700 px-2 py-1 rounded">${c}</span></div>`})}
-
-function startPractice(qs,res=false){
-    if(qs.length===0)return res?null:alert("No questions!");
-    topicQs=[...qs];
-    for(let i=topicQs.length-1;i>0;i--){
-        const j=Math.floor(Math.random()*(i+1));
-        [topicQs[i],topicQs[j]]=[topicQs[j],topicQs[i]];
+function renderTopics(searchResults = null) {
+    const l=document.getElementById('topic-list');
+    const isSrsEnabled = localStorage.getItem('srs_enabled') !== 'false';
+    l.innerHTML="";
+    
+    if (searchResults) {
+        searchResults.forEach(q => {
+            l.innerHTML += `
+                <div onclick="startPractice([${JSON.stringify(q).replace(/"/g, '&quot;')}], false)" class="bg-white p-4 rounded-xl border-2 border-blue-100 shadow-sm cursor-pointer hover:bg-blue-50">
+                    <p class="text-xs font-bold text-gray-800 line-clamp-2">${q.q_text || q.q}</p>
+                    <p class="text-[8px] text-blue-500 font-black uppercase mt-1 tracking-widest">${q.topic}</p>
+                </div>`;
+        });
+        return;
     }
-    idx=0;sessionStorage.setItem('lastTopic',topicQs[0].topic);ss('quiz-screen');loadQ()}
+
+    const processTopic = (t, count, isFromSearch = false) => {
+        const savedIdx = localStorage.getItem(`lastIdx_${cur}_${t}`);
+        const hasProgress = !isSrsEnabled && !isFromSearch && savedIdx !== null && parseInt(savedIdx) > 0;
+        
+        return `
+            <div class="bg-white p-4 rounded-xl border flex justify-between items-center shadow-sm cursor-pointer hover:bg-red-50 group">
+                <div onclick="startPractice(null, false, '${t}')" class="flex-1">
+                    <span class="font-bold text-gray-700">${t}</span>
+                    ${hasProgress ? `<p class="text-[9px] text-orange-500 font-bold uppercase">Resuming at Q${parseInt(savedIdx)+1}</p>` : ''}
+                </div>
+                <div class="flex items-center gap-2">
+                    ${hasProgress ? `<button onclick="resetTopicProgress('${t}')" class="p-2 hover:bg-red-100 rounded-lg text-red-500 transition-colors" title="Reset Progress">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    </button>` : ''}
+                    <span class="text-xs font-black bg-red-100 text-red-700 px-2 py-1 rounded">${count}</span>
+                </div>
+            </div>`;
+    };
+
+    syl[currentSubject].forEach(t => {
+        const c = master.filter(q => q.topic === t).length;
+        l.innerHTML += processTopic(t, c, false);
+    });
+}
+
+function resetTopicProgress(topicName) {
+    if(confirm(`Reset progress for "${topicName}"?`)) {
+        localStorage.removeItem(`lastIdx_${cur}_topicName`);
+        renderTopics();
+    }
+}
+
+function filterTopics() {
+    const query = document.getElementById('topic-search-input').value.toLowerCase().trim();
+    
+    if(!query) {
+        isSearchActive = false;
+        return renderTopics();
+    }
+
+    const matchingQs = master.filter(q => {
+        const inQuestion = (q.q_text || q.q || "").toLowerCase().includes(query);
+        const inOptions = q.options && q.options.some(opt => opt.toLowerCase().includes(query));
+        return inQuestion || inOptions;
+    });
+    
+    isSearchActive = true;
+    renderTopics(matchingQs);
+}
+
+function startPractice(qs, isResuming = false, topicName = null){
+    const isSrsEnabled = localStorage.getItem('srs_enabled') !== 'false';
+
+    if (topicName) {
+        isSearchActive = false;
+        topicQs = master.filter(q => q.topic === topicName);
+    } else if (qs) {
+        topicQs = [...qs];
+        if (!isResuming) isSearchActive = true;
+    }
+    
+    if(!topicQs || topicQs.length===0) return isResuming ? null : alert("No questions!");
+
+    if (!isSrsEnabled) {
+        const savedIdx = localStorage.getItem(`lastIdx_${cur}_${topicQs[0].topic}`);
+        idx = (savedIdx !== null && !isSearchActive && parseInt(savedIdx) < topicQs.length) ? parseInt(savedIdx) : 0;
+    } else {
+        if (!isResuming) {
+            if (!isSearchActive) {
+                for(let i=topicQs.length-1;i>0;i--){
+                    const j=Math.floor(Math.random()*(i+1));
+                    [topicQs[i],topicQs[j]]=[topicQs[j],topicQs[i]];
+                }
+            }
+            idx = 0;
+        }
+    }
+
+    sessionStorage.setItem('lastTopic', topicQs[0].topic);
+    ss('quiz-screen');
+    loadQ();
+}
 
 function startTimer() {
     clearInterval(timerInterval);
@@ -301,7 +434,6 @@ function startTimer() {
     const display = document.getElementById('timer-display');
     display.classList.remove('timer-warn');
     display.innerText = timeLeft;
-
     timerInterval = setInterval(() => {
         timeLeft--;
         display.innerText = timeLeft < 10 ? "0" + timeLeft : timeLeft;
@@ -315,22 +447,29 @@ function startTimer() {
 
 function handleTimeUp() {
     const q = topicQs[idx];
+    const isSrs = localStorage.getItem('srs_enabled') !== 'false';
     const b = document.querySelectorAll('.option-btn');
     b.forEach(btn => btn.disabled = true);
     b[q.correct].classList.add('correct');
     showExplanation();
-    document.getElementById('srs-actions').classList.remove('hidden');
+    if(isSrs) toggleSRSActions(true);
 }
 
 async function loadQ(){
     const q=topicQs[idx];
+    const isSrs = localStorage.getItem('srs_enabled') !== 'false';
+    
+    if (!isSrs && !isSearchActive) {
+        localStorage.setItem(`lastIdx_${cur}_${q.topic}`, idx);
+    }
+    
     document.getElementById('progress-text').innerText=`${idx+1}/${topicQs.length}`;
     document.getElementById('question-text').innerText=q.q_text||q.q;
     document.getElementById('srs-actions').classList.add('hidden');
+    document.getElementById('non-srs-nav').classList.toggle('hidden', isSrs);
     const g=document.getElementById('options-grid');
     g.innerHTML="";
     q.options.forEach((o,i)=>{g.innerHTML+=`<button onclick="checkAns(${i},${q.correct})" class="option-btn w-full p-4 rounded-xl text-left font-bold text-sm shadow-sm text-gray-800">${o}</button>`});
-    
     const tBox = document.getElementById('timer-box');
     const timerOn = (localStorage.getItem('timer_enabled') !== 'false'); 
     if (timerOn) {
@@ -340,20 +479,56 @@ async function loadQ(){
         tBox.style.display = 'none';
         clearInterval(timerInterval);
     }
-    
-    if(document.getElementById('srs-toggle').checked)await labels(q.id);
+    if(isSrs && !isSearchActive) await labels(q.id);
+}
+
+function navPrev() { if(idx > 0) { idx--; loadQ(); } }
+
+function navNext() { 
+    if(idx < topicQs.length - 1) { 
+        idx++; 
+        loadQ(); 
+    } else { 
+        sessionStorage.removeItem('lastTopic');
+        const overlay = document.getElementById('finish-overlay');
+        overlay.style.display = 'flex'; 
+        setTimeout(() => {
+            overlay.style.display = 'none'; 
+            handleHardwareBack(); 
+        }, 1500);
+    } 
 }
 
 async function labels(id){const cK=`l_${cur}_${id}`;if(!navigator.onLine){const c=localStorage.getItem(cK);if(c){const d=JSON.parse(c);document.getElementById('time-good').innerText=d.g+"d";document.getElementById('time-easy').innerText=d.e+"d";return}}try{const{data:u}=await _s.from('user_progress').select('*').eq('username',cur).eq('question_id',id).maybeSingle();const ef=u?.ease_factor||2.5,iv=u?.interval||0,reps=u?.repetitions||0,g=reps===0?1:(reps===1?4:Math.round(iv*ef)),e=Math.round((iv||1)*(ef+0.15)*1.3);document.getElementById('time-good').innerText=g+"d";document.getElementById('time-easy').innerText=e+"d";localStorage.setItem(cK,JSON.stringify({g,e}))}catch(e){}}
 
 function checkAns(i,c){
     clearInterval(timerInterval); 
+    const isSrs = localStorage.getItem('srs_enabled') !== 'false';
     const b=document.querySelectorAll('.option-btn');
     b.forEach(btn=>btn.disabled=true);
     if(i===c)b[i].classList.add('correct');
     else{b[i].classList.add('wrong');b[c].classList.add('correct')}
     showExplanation();
-    document.getElementById('srs-actions').classList.remove('hidden');
+    if(isSrs) toggleSRSActions(true);
+}
+
+function toggleSRSActions(show) {
+    const srsActions = document.getElementById('srs-actions');
+    const ratingBtns = document.getElementById('srs-rating-buttons');
+    const nextContainer = document.getElementById('srs-next-container');
+
+    if (show) {
+        srsActions.classList.remove('hidden');
+        if (isSearchActive) {
+            ratingBtns.classList.add('hidden');
+            nextContainer.classList.remove('hidden');
+        } else {
+            ratingBtns.classList.remove('hidden');
+            nextContainer.classList.add('hidden');
+        }
+    } else {
+        srsActions.classList.add('hidden');
+    }
 }
 
 function showExplanation() {
@@ -369,22 +544,19 @@ function showExplanation() {
 
 async function submitReview(qV){
     clearInterval(timerInterval); 
-    const cQ=topicQs[idx], d={p_username:cur, p_question_id:cQ.id, p_quality:qV};
-    
-    if(navigator.onLine) await _s.rpc('handle_user_answer',d);
-    else {
-        const qe=JSON.parse(localStorage.getItem('q')||"[]");
-        qe.push(d);
-        localStorage.setItem('q',JSON.stringify(qe));
-    }
-    
-    if(qV>2){
-        master=master.filter(i=>i.id!==cQ.id);
-        localStorage.setItem('c_q',JSON.stringify(master));
-        const bI=`badge-${cQ.topic.replace(/\s+/g,'')}`, bE=document.getElementById(bI);
-        if(bE){
-            const cC=parseInt(bE.innerText);
-            bE.innerText=Math.max(0,cC-1);
+    const cQ=topicQs[idx];
+
+    if (!isSearchActive) {
+        const d={p_username:cur, p_question_id:cQ.id, p_quality:qV};
+        if(navigator.onLine) await _s.rpc('handle_user_answer',d);
+        else {
+            const qe=JSON.parse(localStorage.getItem('q')||"[]");
+            qe.push(d);
+            localStorage.setItem('q',JSON.stringify(qe));
+        }
+        if(qV>2){
+            master=master.filter(i=>i.id!==cQ.id);
+            localStorage.setItem('c_q',JSON.stringify(master));
         }
     }
 
@@ -393,11 +565,12 @@ async function submitReview(qV){
         loadQ();
     } else {
         sessionStorage.removeItem('lastTopic');
-        if(navigator.onLine) await _s.rpc('update_user_streak',{p_username:cur});
-        
+        if (!isSearchActive) {
+            localStorage.removeItem(`lastIdx_${cur}_${cQ.topic}`);
+            if(navigator.onLine) await _s.rpc('update_user_streak',{p_username:cur});
+        }
         const overlay = document.getElementById('finish-overlay');
         overlay.style.display = 'flex'; 
-        
         setTimeout(() => {
             overlay.style.display = 'none'; 
             handleHardwareBack(); 
