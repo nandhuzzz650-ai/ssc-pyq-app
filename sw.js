@@ -1,29 +1,18 @@
-const CACHE_NAME = 'ssc-app-v1';
-const ASSETS_TO_CACHE = [
-  './index.html',
-  './manifest.json',
-  './icon.png',
-  'https://unpkg.com/react@18/umd/react.development.js',
-  'https://unpkg.com/react-dom@18/umd/react-dom.development.js',
-  'https://unpkg.com/@babel/standalone/babel.min.js',
-  'https://cdn.tailwindcss.com',
-  'https://unpkg.com/lucide@latest',
-  'https://unpkg.com/@supabase/supabase-js@2'
-];
+const CACHE_NAME = 'ssc-online-v1';
 
+// 1. Install Event: Just succeed immediately
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
-  );
+  self.skipWaiting();
 });
 
-self.addEventListener('fetch', (event) => {
-  // Ignore Supabase API calls in SW (Handled by App Sync Logic)
-  if (event.request.url.includes('supabase.co')) return;
+// 2. Activate Event: Claim clients immediately
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
 
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
-    })
-  );
+// 3. Fetch Event: NETWORK ONLY (No caching)
+// We simply pass the request through to the internet.
+// If offline, it will show the standard browser "No Internet" dino.
+self.addEventListener('fetch', (event) => {
+  event.respondWith(fetch(event.request));
 });
