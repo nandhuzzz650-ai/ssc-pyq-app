@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" href="./icon.png">
     <link rel="apple-touch-icon" href="./icon.png">
     <meta name="theme-color" content="#2563eb">
-
+    
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -21,8 +21,6 @@
         body { font-family: 'Inter', sans-serif; background-color: #f0f9ff; padding-bottom: 80px; }
         .slide-in { animation: slideIn 0.3s ease-out; }
         @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .spin { animation: spin 1s linear infinite; }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #f1f5f9; }
         ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
@@ -33,69 +31,22 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // --- 0. PWA REGISTRATION ---
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW Fail', err));
-            });
-        }
-
-        // --- 1. INDEXED DB HELPER (The Offline Engine) ---
-        const DB_NAME = 'SSC_PWA_DB';
-        const DB_VERSION = 1;
-        
-        const openDB = () => {
-            return new Promise((resolve, reject) => {
-                const req = indexedDB.open(DB_NAME, DB_VERSION);
-                req.onupgradeneeded = (e) => {
-                    const db = e.target.result;
-                    if (!db.objectStoreNames.contains('questions')) db.createObjectStore('questions', { keyPath: 'id' });
-                    if (!db.objectStoreNames.contains('progress')) db.createObjectStore('progress', { keyPath: 'question_id' });
-                    if (!db.objectStoreNames.contains('sync_queue')) db.createObjectStore('sync_queue', { keyPath: 'id', autoIncrement: true });
-                };
-                req.onsuccess = () => resolve(req.result);
-                req.onerror = () => reject(req.error);
-            });
-        };
-
-        const dbOp = async (storeName, mode, callback) => {
-            const db = await openDB();
-            return new Promise((resolve, reject) => {
-                const tx = db.transaction(storeName, mode);
-                const store = tx.objectStore(storeName);
-                const req = callback(store);
-                req.onsuccess = () => resolve(req.result);
-                req.onerror = () => reject(req.error);
-            });
-        };
-
-        const LocalDB = {
-            saveQuestions: (questions) => {
-                return new Promise(async (resolve) => {
-                    const db = await openDB();
-                    const tx = db.transaction('questions', 'readwrite');
-                    const store = tx.objectStore('questions');
-                    questions.forEach(q => store.put(q));
-                    tx.oncomplete = () => resolve();
-                });
-            },
-            getQuestions: async () => await dbOp('questions', 'readonly', store => store.getAll()),
-            saveProgress: (progressItem) => dbOp('progress', 'readwrite', store => store.put(progressItem)),
-            getProgress: async () => await dbOp('progress', 'readonly', store => store.getAll()),
-            addToSyncQueue: (data) => dbOp('sync_queue', 'readwrite', store => store.add({ ...data, timestamp: Date.now() })),
-            getSyncQueue: async () => await dbOp('sync_queue', 'readonly', store => store.getAll()),
-            clearSyncQueue: async () => dbOp('sync_queue', 'readwrite', store => store.clear())
-        };
-
         try {
-            // --- 2. CONFIGURATION ---
+            // --- 0. PWA REGISTRATION ---
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW Fail', err));
+                });
+            }
+
+            // --- 1. CONFIGURATION ---
             const SUPABASE_URL = "https://lkwciklwwssrwzgecrvv.supabase.co";
             const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxrd2Npa2x3d3Nzcnd6Z2VjcnZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5NjAwNjYsImV4cCI6MjA4NDUzNjA2Nn0.l-M24USVWXR_WOJLP0vP3MtXfCsllU9n1VXOau9JN8A";
             
             const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             const { useState, useEffect, useRef } = React;
 
-            // --- 3. ICON HELPER ---
+            // --- 2. ICON HELPER ---
             const Icon = ({ name, size = 24, className = "" }) => {
                 const iconRef = useRef(null);
                 useEffect(() => {
@@ -110,7 +61,7 @@
                 return <span ref={iconRef} className="inline-flex items-center justify-center" />;
             };
 
-            // --- 4. DATA & UTILS ---
+            // --- 3. DATA & UTILS ---
             const TOPICS = {
                 "Quantitative Aptitude": {
                     timerRange: { min: 40, max: 60 },
@@ -132,50 +83,35 @@
 
             const normalizeText = (text) => (text || "").trim().toLowerCase();
 
+            // --- FIX: Round intervals to Integers to prevent DB Errors ---
             const calculateSM2 = (quality, prevEf, prevRepetitions, prevInterval) => {
                 let nextEf = prevEf + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
                 if (nextEf < 1.3) nextEf = 1.3;
+                
                 let nextRepetitions = quality < 3 ? 0 : prevRepetitions + 1;
                 let nextInterval;
-                if (quality < 3) { nextInterval = 0; } 
-                else {
+                
+                if (quality < 3) { 
+                    nextInterval = 0; // Fail -> Immediate
+                } else {
                     if (prevRepetitions === 0) {
-                        if (quality === 3) nextInterval = 0.5;
-                        else if (quality === 4) nextInterval = 1;
-                        else if (quality === 5) nextInterval = 4;
+                        // FIX: Changed 0.5 to 1 to ensure Integer compatibility
+                        if (quality === 3) nextInterval = 1;      // Hard -> 1 day
+                        else if (quality === 4) nextInterval = 2; // Good -> 2 days
+                        else if (quality === 5) nextInterval = 4; // Easy -> 4 days
                     } else {
-                        if (prevRepetitions === 1 && quality === 3) nextInterval = 1; 
+                        if (prevRepetitions === 1 && quality === 3) nextInterval = 2; 
                         else if (prevRepetitions === 1 && quality === 4) nextInterval = 3;
-                        else nextInterval = Math.round(prevInterval * nextEf * 10) / 10;
+                        else nextInterval = Math.round(prevInterval * nextEf); // FIX: Ensure round
                     }
                 }
+                // Safety clamp
+                if (nextInterval < 1 && quality >= 3) nextInterval = 1;
+                
                 return { ef: nextEf, reps: nextRepetitions, interval: nextInterval };
             };
 
-            // --- 5. COMPONENT: SYNC INDICATOR ---
-            const NetworkStatus = ({ isOnline, isSyncing, pendingCount }) => {
-                return (
-                    <div className="fixed bottom-4 left-4 z-50 flex flex-col gap-2">
-                        {!isOnline && (
-                            <div className="bg-slate-800 text-white text-xs px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2">
-                                <Icon name="WifiOff" size={14} /> Offline Mode
-                            </div>
-                        )}
-                        {isOnline && isSyncing && (
-                            <div className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2">
-                                <Icon name="Loader" size={14} className="spin" /> Syncing...
-                            </div>
-                        )}
-                        {pendingCount > 0 && (
-                            <div className="bg-orange-500 text-white text-xs px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2">
-                                <Icon name="Save" size={14} /> {pendingCount} changes pending
-                            </div>
-                        )}
-                    </div>
-                );
-            };
-
-            // --- 6. MAIN COMPONENTS ---
+            // --- 5. COMPONENTS ---
 
             const Auth = ({ onLogin }) => {
                 const [view, setView] = useState('login'); 
@@ -187,7 +123,6 @@
                 const handleLogin = async (e) => {
                     e.preventDefault(); setLoading(true); setError('');
                     try {
-                        if (!navigator.onLine) throw new Error("Internet required to login first time.");
                         const { data, error } = await supabase.from('users').select('*').eq('username', formData.username).eq('password', formData.password).single();
                         if (error || !data) throw new Error("Invalid username or password");
                         onLogin(data);
@@ -196,7 +131,6 @@
                 const handleSignup = async (e) => {
                     e.preventDefault(); setLoading(true); setError('');
                     try {
-                        if (!navigator.onLine) throw new Error("Internet required to sign up.");
                         const { data: existing } = await supabase.from('users').select('id').eq('username', formData.username).single();
                         if (existing) throw new Error("Username already taken");
                         const { data, error } = await supabase.from('users').insert([{ username: formData.username, password: formData.password, recovery_question: formData.recoveryQ, recovery_answer: formData.recoveryA }]).select().single();
@@ -205,10 +139,9 @@
                         onLogin(data);
                     } catch (err) { setError(err.message); } finally { setLoading(false); }
                 };
-                 const handleFetchQuestion = async (e) => {
+                const handleFetchQuestion = async (e) => {
                     e.preventDefault(); setLoading(true); setError('');
                     try {
-                        if (!navigator.onLine) throw new Error("Internet required.");
                         const { data, error } = await supabase.from('users').select('recovery_question').eq('username', formData.username).single();
                         if (error || !data) throw new Error("User not found");
                         setFetchedQuestion(data.recovery_question);
@@ -217,7 +150,6 @@
                 const handleResetPassword = async (e) => {
                     e.preventDefault(); setLoading(true); setError('');
                     try {
-                         if (!navigator.onLine) throw new Error("Internet required.");
                         const { data, error } = await supabase.from('users').update({ password: formData.newPassword }).eq('username', formData.username).eq('recovery_answer', formData.recoveryA).select();
                         if (error) throw error;
                         if (data.length === 0) throw new Error("Incorrect Recovery Answer");
@@ -278,7 +210,7 @@
                 );
             };
 
-            const Home = ({ user, onSelectTopic, onLogout, globalSrMode, setGlobalSrMode, onSync }) => {
+            const Home = ({ user, onSelectTopic, onLogout, globalSrMode, setGlobalSrMode }) => {
                 const username = user.username || "Learner";
                 return (
                     <div className="min-h-screen bg-slate-50">
@@ -288,19 +220,13 @@
                                     <Icon name="BookOpen" className="text-blue-600" size={24} />
                                     <h1 className="font-bold text-lg text-blue-900 tracking-wide hidden md:block">SSC PYQS BY DAILY INTELLECT</h1>
                                 </div>
-                                <div className="flex gap-2">
-                                    <button onClick={onSync} className="p-2 text-slate-400 hover:text-blue-600" title="Force Sync"><Icon name="RefreshCw" size={20} /></button>
-                                    <button onClick={onLogout} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Icon name="LogOut" size={20} /></button>
-                                </div>
+                                <button onClick={onLogout} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Icon name="LogOut" size={20} /></button>
                             </div>
                         </header>
                         <div className="max-w-7xl mx-auto px-4 py-6">
                             <div className="flex flex-col md:flex-row justify-between items-center bg-blue-600 rounded-xl p-6 text-white shadow-lg mb-8">
                                 <div><h2 className="text-2xl font-bold">Hello, {username}!</h2><p className="text-blue-100 opacity-90">Ready to crush your goals today?</p></div>
                                 <div className="flex items-center gap-4 mt-4 md:mt-0">
-                                    <button onClick={onSync} className="flex items-center gap-1 bg-white text-blue-600 px-3 py-1 rounded-full text-sm font-bold shadow hover:bg-blue-50">
-                                        <Icon name="DownloadCloud" size={16} /> Download Data
-                                    </button>
                                     <div className="flex items-center gap-2">
                                         <span className="text-sm font-medium">Spaced Repetition</span>
                                         <button onClick={() => setGlobalSrMode(!globalSrMode)} className={`w-12 h-6 rounded-full p-1 transition-colors ${globalSrMode ? 'bg-green-400' : 'bg-slate-400'}`}>
@@ -331,45 +257,51 @@
                 );
             };
 
-            const SubtopicView = ({ topic, globalSrMode, setGlobalSrMode, onBack, onStartWorkout, user, onSync, onSearchSelect }) => {
+            const SubtopicView = ({ topic, globalSrMode, setGlobalSrMode, onBack, onStartWorkout, user }) => {
                 const [timerEnabled, setTimerEnabled] = useState(() => {
                     const saved = localStorage.getItem('ssc_timer_enabled');
                     return saved !== null ? JSON.parse(saved) : true;
                 });
+
                 const [timerValue, setTimerValue] = useState(() => {
                     const saved = localStorage.getItem(`ssc_timer_value_${topic}`);
                     const val = saved ? parseInt(saved) : TOPICS[topic].timerRange.min;
-                    return (val >= TOPICS[topic].timerRange.min && val <= TOPICS[topic].timerRange.max) ? val : TOPICS[topic].timerRange.min;
+                    return (val >= TOPICS[topic].timerRange.min && val <= TOPICS[topic].timerRange.max) 
+                        ? val 
+                        : TOPICS[topic].timerRange.min;
                 });
                 
-                // --- NEW: Search State ---
-                const [searchQuery, setSearchQuery] = useState('');
-                const [topicQuestions, setTopicQuestions] = useState([]);
-                
-                useEffect(() => { localStorage.setItem('ssc_timer_enabled', JSON.stringify(timerEnabled)); }, [timerEnabled]);
-                useEffect(() => { localStorage.setItem(`ssc_timer_value_${topic}`, timerValue); }, [timerValue, topic]);
+                useEffect(() => {
+                    localStorage.setItem('ssc_timer_enabled', JSON.stringify(timerEnabled));
+                }, [timerEnabled]);
+
+                useEffect(() => {
+                    localStorage.setItem(`ssc_timer_value_${topic}`, timerValue);
+                }, [timerValue, topic]);
 
                 const [topicStats, setTopicStats] = useState({});
                 const [loadingStats, setLoadingStats] = useState(true);
-                const [totalQuestionsInDB, setTotalQuestionsInDB] = useState(0);
 
                 useEffect(() => {
                     const fetchTopicStats = async () => {
                         setLoadingStats(true);
-                        const allQ = await LocalDB.getQuestions();
-                        setTotalQuestionsInDB(allQ.length);
-                        
-                        // FIX: Match subtopics by NAME
-                        const currentSubtopicsSet = new Set(TOPICS[topic].subtopics.map(s => normalizeText(s)));
-                        const qData = allQ.filter(q => q.subtopic && currentSubtopicsSet.has(normalizeText(q.subtopic)));
-                        
-                        // Save for search
-                        setTopicQuestions(qData);
+                        let qData = [];
+                        const { data: d1 } = await supabase.from('questions').select('id, subtopic').eq('topic', topic).limit(5000);
+                        if(d1 && d1.length > 0) qData = d1;
+                        if(qData.length === 0) {
+                             const { data: d2 } = await supabase.from('questions').select('id, subtopic').limit(5000); 
+                             qData = d2 || []; 
+                        }
 
-                        const allP = await LocalDB.getProgress();
+                        const qIds = qData.map(q => q.id);
+                        if (qIds.length === 0) { setTopicStats({}); setLoadingStats(false); return; }
+
+                        const { data: prog } = await supabase.from('user_progress').select('question_id, next_review').eq('user_id', user.id).in('question_id', qIds);
+                        
+                        // FIX: Ensure ID matching matches string/int correctly
                         const progMap = {};
-                        allP.forEach(p => progMap[String(p.question_id)] = p);
-
+                        (prog || []).forEach(p => progMap[String(p.question_id)] = p);
+                        
                         const newStats = {};
                         const now = new Date();
 
@@ -379,11 +311,8 @@
                             if (!newStats[subKey]) newStats[subKey] = { new: 0, due: 0 };
                             
                             const p = progMap[String(q.id)];
-                            if (!p) { newStats[subKey].new += 1; } 
-                            else {
-                                const nextReview = new Date(p.next_review);
-                                if (!isNaN(nextReview.getTime()) && nextReview <= now) { newStats[subKey].due += 1; }
-                            }
+                            if (!p) newStats[subKey].new += 1;
+                            else if (new Date(p.next_review) <= now) newStats[subKey].due += 1;
                         });
                         setTopicStats(newStats);
                         setLoadingStats(false);
@@ -397,113 +326,65 @@
                     setTopicStats({...topicStats});
                 };
 
-                // --- NEW: Filtered Results ---
-                const filteredSearchResults = searchQuery.length > 1 ? topicQuestions.filter(q => {
-                    const txt = searchQuery.toLowerCase();
-                    return (q.q_text || q.question_text || "").toLowerCase().includes(txt) || 
-                           (q.options || []).some(o => o.toLowerCase().includes(txt));
-                }) : [];
-
                 return (
                     <div className="min-h-screen bg-slate-50 flex flex-col">
                         <div className="bg-white shadow-sm p-4 sticky top-0 z-20">
                             <button onClick={onBack} className="flex items-center gap-1 text-slate-500 hover:text-blue-600 mb-2"><Icon name="ChevronLeft" size={16} /> Back to Dashboard</button>
                             <h2 className="text-xl font-bold text-blue-900">{topic}</h2>
-                            
-                            {/* --- NEW: Search Bar --- */}
-                            <div className="mt-4 relative">
-                                <Icon name="Search" className="absolute left-3 top-3 text-slate-400" size={18} />
-                                <input 
-                                    type="text" 
-                                    placeholder={`Search questions in ${topic}...`} 
-                                    className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 bg-slate-50 focus:bg-white transition-colors"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                />
-                            </div>
                         </div>
-
                         <div className="max-w-4xl mx-auto w-full p-4 flex-grow">
-                            
-                            {/* --- NEW: Search Results View --- */}
-                            {searchQuery.length > 1 ? (
-                                <div className="space-y-3">
-                                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-2">Search Results ({filteredSearchResults.length})</h3>
-                                    {filteredSearchResults.length === 0 ? (
-                                        <div className="text-center p-8 text-slate-400">No matching questions found.</div>
-                                    ) : (
-                                        filteredSearchResults.map((q, idx) => (
-                                            <button key={q.id} onClick={() => onSearchSelect(q)} className="w-full p-4 bg-white border border-slate-100 rounded-lg hover:border-blue-300 hover:shadow-md transition-all text-left">
-                                                <p className="text-sm font-medium text-slate-800 line-clamp-2">{q.q_text || q.question_text}</p>
-                                                <span className="text-xs text-blue-500 mt-1 block">{q.subtopic}</span>
-                                            </button>
-                                        ))
-                                    )}
-                                </div>
-                            ) : (
-                                /* Normal Subtopic List View */
-                                <>
-                                    <div className="bg-white rounded-xl shadow-sm p-5 mb-6 border border-slate-100">
-                                        <div className="grid md:grid-cols-2 gap-6">
-                                            <div>
-                                                <div className="flex justify-between items-center mb-2">
-                                                    <span className="text-sm font-semibold text-slate-700 flex items-center gap-2"><Icon name="Clock" size={16} /> Timer ({timerValue}s)</span>
-                                                    <button onClick={() => setTimerEnabled(!timerEnabled)} className={`text-xs font-bold px-2 py-1 rounded ${timerEnabled ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500'}`}>{timerEnabled ? 'ON' : 'OFF'}</button>
-                                                </div>
-                                                <input type="range" min={TOPICS[topic].timerRange.min} max={TOPICS[topic].timerRange.max} value={timerValue} onChange={(e) => setTimerValue(e.target.value)} disabled={!timerEnabled} className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm font-semibold text-slate-700">Spaced Repetition</span>
-                                                <button onClick={() => setGlobalSrMode(!globalSrMode)} className={`w-10 h-5 rounded-full p-0.5 transition-colors ${globalSrMode ? 'bg-blue-600' : 'bg-slate-300'}`}><div className={`w-4 h-4 bg-white rounded-full shadow transform transition-transform ${globalSrMode ? 'translate-x-5' : ''}`}></div></button>
-                                            </div>
+                            <div className="bg-white rounded-xl shadow-sm p-5 mb-6 border border-slate-100">
+                                <div className="grid md:grid-cols-2 gap-6">
+                                    <div>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-sm font-semibold text-slate-700 flex items-center gap-2"><Icon name="Clock" size={16} /> Timer ({timerValue}s)</span>
+                                            <button onClick={() => setTimerEnabled(!timerEnabled)} className={`text-xs font-bold px-2 py-1 rounded ${timerEnabled ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500'}`}>{timerEnabled ? 'ON' : 'OFF'}</button>
                                         </div>
+                                        <input type="range" min={TOPICS[topic].timerRange.min} max={TOPICS[topic].timerRange.max} value={timerValue} onChange={(e) => setTimerValue(e.target.value)} disabled={!timerEnabled} className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
                                     </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm font-semibold text-slate-700">Spaced Repetition</span>
+                                        <button onClick={() => setGlobalSrMode(!globalSrMode)} className={`w-10 h-5 rounded-full p-0.5 transition-colors ${globalSrMode ? 'bg-blue-600' : 'bg-slate-300'}`}><div className={`w-4 h-4 bg-white rounded-full shadow transform transition-transform ${globalSrMode ? 'translate-x-5' : ''}`}></div></button>
+                                    </div>
+                                </div>
+                            </div>
 
-                                    <div className="space-y-2">
-                                        {loadingStats && <div className="text-center text-sm text-slate-400 p-2">Loading...</div>}
-                                        {!loadingStats && totalQuestionsInDB === 0 && (
-                                            <div className="text-center p-8 bg-white rounded-xl shadow-sm">
-                                                <Icon name="CloudOff" className="mx-auto text-slate-400 mb-2" size={32} />
-                                                <p className="text-slate-600 font-medium mb-4">No offline data found.</p>
-                                                <button onClick={onSync} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold">Download Questions Now</button>
+                            <div className="space-y-2">
+                                {loadingStats && <div className="text-center text-sm text-slate-400 p-2">Syncing stats...</div>}
+                                {TOPICS[topic].subtopics.map((sub, idx) => {
+                                    const data = topicStats[normalizeText(sub)] || { new: 0, due: 0 };
+                                    const progressIndex = getProgress(sub);
+                                    return (
+                                        <button key={idx} onClick={() => onStartWorkout(sub, globalSrMode, timerEnabled ? timerValue : null)} className="w-full flex justify-between items-center p-4 bg-white border border-slate-100 rounded-lg hover:border-blue-300 hover:shadow-md transition-all text-left">
+                                            <div>
+                                                <span className="font-medium text-slate-700 block">{sub}</span>
+                                                <div className="flex gap-2 mt-2">
+                                                    {globalSrMode ? (
+                                                        <>
+                                                            {data.due > 0 && <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-bold">{data.due} Due</span>}
+                                                            {data.new > 0 ? <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">{data.new} New</span> : (data.due === 0 && <span className="text-[10px] text-slate-400 font-bold">All caught up</span>)}
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold">Resuming at Q{progressIndex + 1}</span>
+                                                    )}
+                                                </div>
                                             </div>
-                                        )}
-                                        {TOPICS[topic].subtopics.map((sub, idx) => {
-                                            const data = topicStats[normalizeText(sub)] || { new: 0, due: 0 };
-                                            const progressIndex = getProgress(sub);
-                                            return (
-                                                <button key={idx} onClick={() => onStartWorkout(sub, globalSrMode, timerEnabled ? timerValue : null)} className="w-full flex justify-between items-center p-4 bg-white border border-slate-100 rounded-lg hover:border-blue-300 hover:shadow-md transition-all text-left">
-                                                    <div>
-                                                        <span className="font-medium text-slate-700 block">{sub}</span>
-                                                        <div className="flex gap-2 mt-2">
-                                                            {globalSrMode ? (
-                                                                <>
-                                                                    {data.due > 0 && <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-bold">{data.due} Due</span>}
-                                                                    {data.new > 0 ? <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">{data.new} New</span> : (data.due === 0 && <span className="text-[10px] text-slate-400 font-bold">All caught up</span>)}
-                                                                </>
-                                                            ) : (
-                                                                <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold">Resuming at Q{progressIndex + 1}</span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-3">
-                                                        {!globalSrMode && progressIndex > 0 && (
-                                                            <div onClick={(e) => resetProgress(e, sub)} className="p-2 bg-slate-100 hover:bg-red-100 text-slate-400 hover:text-red-500 rounded-full transition-colors" title="Reset Progress"><Icon name="RotateCcw" size={14} /></div>
-                                                        )}
-                                                        <div className="bg-blue-50 text-blue-600 p-1.5 rounded-full"><Icon name="ChevronRight" size={16} /></div>
-                                                    </div>
-                                                </button>
-                                            )
-                                        })}
-                                    </div>
-                                </>
-                            )}
+                                            <div className="flex items-center gap-3">
+                                                {!globalSrMode && progressIndex > 0 && (
+                                                    <div onClick={(e) => resetProgress(e, sub)} className="p-2 bg-slate-100 hover:bg-red-100 text-slate-400 hover:text-red-500 rounded-full transition-colors" title="Reset Progress"><Icon name="RotateCcw" size={14} /></div>
+                                                )}
+                                                <div className="bg-blue-50 text-blue-600 p-1.5 rounded-full"><Icon name="ChevronRight" size={16} /></div>
+                                            </div>
+                                        </button>
+                                    )
+                                })}
+                            </div>
                         </div>
                     </div>
                 );
             };
 
-            const WorkoutView = ({ subtopic, questionsData, initialIndex, srMode, timerSetting, onBack, user, readOnly }) => {
+            const WorkoutView = ({ subtopic, questionsData, initialIndex, srMode, timerSetting, onBack, user }) => {
                 const isCustomList = questionsData && questionsData.length > 0;
                 const [questions, setQuestions] = useState(isCustomList ? questionsData : []);
                 const [currentIdx, setCurrentIdx] = useState(initialIndex || 0);
@@ -511,6 +392,7 @@
                 const [timeLeft, setTimeLeft] = useState(timerSetting || 0);
                 const [selectedOption, setSelectedOption] = useState(null); 
                 const [isRevealed, setIsRevealed] = useState(false);
+
                 const currentQ = questions[currentIdx];
                 const getQText = (q) => q.question_text || q.q_text || "Error: Missing Text";
                 const getOptions = (q) => q.options || [];
@@ -519,25 +401,28 @@
                     if (isCustomList) return;
                     const fetchQuestions = async () => {
                         setLoading(true);
-                        const allQ = await LocalDB.getQuestions();
-                        const filtered = allQ.filter(q => q.subtopic && normalizeText(q.subtopic) === normalizeText(subtopic));
-                        
-                        let finalQuestions = filtered;
-
+                        let qData = [];
+                        const { data: d1, error: e1 } = await supabase.from('questions').select('*').ilike('subtopic', subtopic);
+                        if (!e1 && d1 && d1.length > 0) qData = d1;
+                        else {
+                            const { data: d2 } = await supabase.from('questions').select('*').ilike('topic', subtopic);
+                            if (d2) qData = d2;
+                        }
+                        let finalQuestions = qData || [];
                         if (srMode) {
-                            const allP = await LocalDB.getProgress();
-                            const now = new Date();
+                            const qIds = finalQuestions.map(q => q.id);
+                            const { data: pData } = await supabase.from('user_progress').select('*').eq('user_id', user.id).in('question_id', qIds);
+                            
+                            // FIX: ID String Matching
                             const progMap = {};
-                            allP.forEach(p => progMap[String(p.question_id)] = p);
+                            (pData||[]).forEach(p => progMap[String(p.question_id)] = p);
 
-                            finalQuestions = finalQuestions.map(q => ({ ...q, progress: progMap[String(q.id)] }));
-                            
+                            const now = new Date();
                             finalQuestions = finalQuestions.filter(q => {
-                                if (!q.progress) return true; 
-                                const nextReview = new Date(q.progress.next_review);
-                                return !isNaN(nextReview.getTime()) && nextReview <= now;
+                                const prog = progMap[String(q.id)];
+                                return !prog || new Date(prog.next_review) <= now;
                             });
-                            
+                            finalQuestions = finalQuestions.map(q => ({ ...q, progress: progMap[String(q.id)] }));
                             setQuestions(finalQuestions);
                         } else {
                             setQuestions(finalQuestions);
@@ -557,12 +442,19 @@
                     return () => clearInterval(timer);
                 }, [timeLeft, isRevealed, timerSetting]);
 
-                const handleOptionClick = (index) => { if (isRevealed) return; setSelectedOption(index); setIsRevealed(true); };
+                const handleOptionClick = (index) => {
+                    if (isRevealed) return;
+                    setSelectedOption(index);
+                    setIsRevealed(true);
+                };
 
                 const handlePrev = () => {
                     if(currentIdx > 0) {
                         const prevIdx = currentIdx - 1;
-                        if (!srMode && !isCustomList && !readOnly) { const key = `progress_${user.id}_${subtopic}`; localStorage.setItem(key, prevIdx); }
+                        if (!srMode && !isCustomList) { 
+                            const key = `progress_${user.id}_${subtopic}`; 
+                            localStorage.setItem(key, prevIdx); 
+                        }
                         setIsRevealed(false); setSelectedOption(null); setTimeLeft(timerSetting || 0); setCurrentIdx(prevIdx);
                     }
                 };
@@ -570,29 +462,42 @@
                 const handleNext = () => {
                     if (currentIdx < questions.length - 1) {
                         const nextIdx = currentIdx + 1;
-                        if (!srMode && !isCustomList && !readOnly) { const key = `progress_${user.id}_${subtopic}`; localStorage.setItem(key, nextIdx); }
+                        if (!srMode && !isCustomList) { 
+                            const key = `progress_${user.id}_${subtopic}`; 
+                            localStorage.setItem(key, nextIdx); 
+                        }
                         setIsRevealed(false); setSelectedOption(null); setTimeLeft(timerSetting || 0); setCurrentIdx(nextIdx);
                     } else {
-                        if (!srMode && !isCustomList && !readOnly) { const key = `progress_${user.id}_${subtopic}`; localStorage.setItem(key, 0); }
-                        if (readOnly) onBack(); else { alert("Workout Complete!"); onBack(); }
+                        if (!srMode && !isCustomList) { const key = `progress_${user.id}_${subtopic}`; localStorage.setItem(key, 0); }
+                        alert("Workout Complete!"); onBack();
                     }
                 };
 
                 const handleReview = async (qualityScore) => {
-                    // --- NEW: Read-Only Check ---
-                    // If readOnly (Search mode), we skip all DB saves
-                    if (readOnly) { handleNext(); return; }
-
                     if (isCustomList) { handleNext(); return; }
-                    const progress = currentQ.progress || { easiness_factor: 2.5, repetitions: 0, interval: 0 };
-                    const results = calculateSM2(qualityScore, (progress.easiness_factor || 2.5), progress.repetitions, progress.interval);
-                    const nextDate = new Date(); nextDate.setTime(nextDate.getTime() + (results.interval * 24 * 60 * 60 * 1000));
                     
-                    const progressPayload = { user_id: user.id, question_id: currentQ.id, easiness_factor: results.ef, repetitions: results.reps, interval: results.interval, next_review: nextDate.toISOString(), last_reviewed: new Date().toISOString() };
-
-                    await LocalDB.saveProgress(progressPayload);
-                    await LocalDB.addToSyncQueue(progressPayload);
-
+                    const progress = currentQ.progress || { easiness_factor: 2.5, repetitions: 0, interval: 0 };
+                    const prevEf = progress.easiness_factor || 2.5; 
+                    
+                    // Calculation with fixed Integers
+                    const results = calculateSM2(qualityScore, prevEf, progress.repetitions, progress.interval);
+                    
+                    const nextDate = new Date();
+                    nextDate.setTime(nextDate.getTime() + (results.interval * 24 * 60 * 60 * 1000));
+                    
+                    try {
+                        // FIX: Ensure ID is standard
+                        await supabase.from('user_progress').upsert({
+                            user_id: user.id,
+                            question_id: currentQ.id,
+                            easiness_factor: results.ef,
+                            repetitions: results.reps,
+                            interval: results.interval,
+                            next_review: nextDate.toISOString(),
+                            last_reviewed: new Date().toISOString()
+                        }, { onConflict: 'user_id, question_id' });
+                    } catch(e) { console.error("Save failed", e); }
+                    
                     if (qualityScore < 3) setQuestions(prev => [...prev, currentQ]);
                     handleNext();
                 };
@@ -613,16 +518,14 @@
                     <div className="min-h-screen bg-slate-50 flex flex-col items-center pb-20">
                         <div className="w-full bg-white shadow-sm p-4 sticky top-0 z-20 flex justify-between items-center">
                             <button onClick={onBack} className="text-slate-500 hover:text-blue-600"><Icon name="XCircle" size={24} /></button>
-                            {/* --- NEW: Show 'Search Result' in header if readOnly --- */}
-                            <div className="text-sm font-bold text-slate-700 truncate max-w-[200px]">{readOnly ? "Search Result (Practice)" : (isCustomList ? "Search Results" : subtopic)}</div>
+                            <div className="text-sm font-bold text-slate-700 truncate max-w-[200px]">{isCustomList ? "Search Results" : subtopic}</div>
                             <div className={`font-mono font-bold text-lg ${timeLeft < 10 && timeLeft > 0 ? 'text-red-500' : 'text-blue-600'}`}>{timerSetting ? timeLeft + 's' : ''}</div>
                         </div>
                         <div className="w-full max-w-2xl p-4 flex-grow flex flex-col">
-                            {/* --- NEW: Read Only Banner --- */}
-                            {readOnly && <div className="bg-yellow-50 text-yellow-800 px-4 py-2 rounded-lg mb-4 text-xs font-bold text-center border border-yellow-200">VIEW ONLY MODE - Progress not saved</div>}
-                            
                             <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
-                                <div className="flex justify-between items-center mb-2"><div className="text-xs font-bold text-blue-500 uppercase tracking-wide">Question {currentIdx + 1} / {questions.length}</div></div>
+                                <div className="flex justify-between items-center mb-2">
+                                    <div className="text-xs font-bold text-blue-500 uppercase tracking-wide">Question {currentIdx + 1} / {questions.length}</div>
+                                </div>
                                 <p className="text-lg text-slate-800 leading-relaxed font-medium">{getQText(currentQ)}</p>
                             </div>
                             <div className="mb-6 space-y-3">
@@ -632,9 +535,11 @@
                                         if (idx === currentQ.correct_index) style += "border-green-500 bg-green-50 text-green-700 font-medium";
                                         else if (idx === selectedOption) style += "border-red-500 bg-red-50 text-red-700";
                                         else style += "border-slate-100 opacity-60";
-                                    } else { style += "border-slate-100 hover:border-blue-300 text-slate-700"; }
+                                    } else {
+                                        style += "border-slate-100 hover:border-blue-300 text-slate-700";
+                                    }
                                     return (
-                                        <button key={idx} onClick={() => handleOptionClick(idx)} className={style} disabled={isRevealed && srMode && !readOnly}>
+                                        <button key={idx} onClick={() => handleOptionClick(idx)} className={style} disabled={isRevealed && srMode}>
                                             <span>{opt}</span>
                                             {isRevealed && idx === currentQ.correct_index && <Icon name="CheckCircle" className="text-green-500" size={20}/>}
                                             {isRevealed && idx === selectedOption && idx !== currentQ.correct_index && <Icon name="XCircle" className="text-red-500" size={20}/>}
@@ -652,8 +557,7 @@
                             )}
                             <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 shadow-lg">
                                 <div className="max-w-2xl mx-auto">
-                                    {/* --- NEW: Logic for controls. If readOnly, show simple Next button even in SR mode --- */}
-                                    {srMode && !isCustomList && !readOnly ? (
+                                    {srMode && !isCustomList ? (
                                         isRevealed && (
                                             <div className="grid grid-cols-4 gap-3">
                                                 <button onClick={() => handleReview(0)} className="flex flex-col items-center py-2 bg-red-50 text-red-600 rounded-lg"><span className="text-xs font-bold">Again</span><span className="text-[10px]">&lt; 1m</span></button>
@@ -682,26 +586,7 @@
                 const [workoutConfig, setWorkoutConfig] = useState({});
                 const [appSrMode, setAppSrMode] = useState(true); 
 
-                const [isOnline, setIsOnline] = useState(navigator.onLine);
-                const [isSyncing, setIsSyncing] = useState(false);
-                const [pendingCount, setPendingCount] = useState(0);
-
-                // --- SYNC: PULL ---
-                const pullDataFromSupabase = async () => {
-                    if (!user || !navigator.onLine) return;
-                    setIsSyncing(true);
-                    try {
-                        const { data: qData } = await supabase.from('questions').select('*').limit(5000);
-                        if (qData) await LocalDB.saveQuestions(qData);
-                        
-                        // --- FIX: Increased limit to ensure all progress is downloaded ---
-                        const { data: pData } = await supabase.from('user_progress').select('*').eq('user_id', user.id).limit(10000);
-                        if (pData) { for (let p of pData) await LocalDB.saveProgress(p); }
-                    } catch (e) { console.error("Sync Pull Fail", e); }
-                    setIsSyncing(false);
-                };
-
-                // --- APP REHYDRATION + AUTO SYNC TRIGGER ---
+                // --- APP REHYDRATION LOGIC START ---
                 useEffect(() => {
                     const savedUser = localStorage.getItem('ssc_user');
                     if (savedUser) { 
@@ -709,23 +594,6 @@
                             const u = JSON.parse(savedUser); 
                             if(u && u.id) { 
                                 setUser(u); 
-                                setTimeout(() => {
-                                    if(navigator.onLine) {
-                                        setIsSyncing(true);
-                                        // Auto-fetch immediately
-                                        supabase.from('questions').select('*').limit(5000).then(({data: qd}) => {
-                                            if(qd) {
-                                                LocalDB.saveQuestions(qd).then(() => {
-                                                    supabase.from('user_progress').select('*').eq('user_id', u.id).limit(10000).then(({data: pd}) => {
-                                                        if(pd) { pd.forEach(p => LocalDB.saveProgress(p)); }
-                                                        setIsSyncing(false);
-                                                    });
-                                                });
-                                            }
-                                        });
-                                    }
-                                }, 1000);
-
                                 const savedNav = localStorage.getItem('ssc_nav_state');
                                 if (savedNav) {
                                     const nav = JSON.parse(savedNav);
@@ -733,54 +601,24 @@
                                     if (nav.activeTopic) setActiveTopic(nav.activeTopic);
                                     if (nav.workoutConfig) setWorkoutConfig(nav.workoutConfig);
                                     if (nav.appSrMode !== undefined) setAppSrMode(nav.appSrMode);
-                                } else { setView('home'); }
+                                } else {
+                                    setView('home'); 
+                                }
                             } 
                         } catch(e){
                             console.error("Session restoration failed:", e);
                             localStorage.removeItem('ssc_user');
                         } 
                     }
-                    window.addEventListener('online', () => setIsOnline(true));
-                    window.addEventListener('offline', () => setIsOnline(false));
                 }, []);
                 
-                // --- QUEUE MONITOR ---
-                useEffect(() => {
-                    const checkQueue = async () => {
-                        const q = await LocalDB.getSyncQueue();
-                        setPendingCount(q.length);
-                    };
-                    const interval = setInterval(checkQueue, 2000);
-                    return () => clearInterval(interval);
-                }, []);
-
-                // --- AUTO PUSH ---
-                useEffect(() => {
-                    if (isOnline && pendingCount > 0 && !isSyncing) {
-                        pushChangesToSupabase();
-                    }
-                }, [isOnline, pendingCount, isSyncing]);
-
-                const pushChangesToSupabase = async () => {
-                    setIsSyncing(true);
-                    try {
-                        const queue = await LocalDB.getSyncQueue();
-                        if (queue.length === 0) return;
-                        const uniqueMap = new Map();
-                        queue.forEach(item => uniqueMap.set(item.question_id, item));
-                        const payload = Array.from(uniqueMap.values()).map(({id, ...rest}) => rest);
-                        const { error } = await supabase.from('user_progress').upsert(payload, { onConflict: 'user_id, question_id' });
-                        if (!error) await LocalDB.clearSyncQueue();
-                    } catch (e) { console.error("Sync Push Fail", e); }
-                    setIsSyncing(false);
-                };
-
-                // --- STATE SAVING ---
+                // --- STATE PERSISTENCE LOGIC START ---
                 useEffect(() => {
                     if (user) {
                         try {
                             const navState = { view, activeTopic, workoutConfig, appSrMode };
-                            if (workoutConfig?.questionsData?.length > 100) {} 
+                            if (workoutConfig?.questionsData?.length > 100) {
+                            }
                             localStorage.setItem('ssc_nav_state', JSON.stringify(navState));
                         } catch (e) { console.error("Could not save nav state", e); }
                     }
@@ -790,7 +628,6 @@
                     localStorage.setItem('ssc_user', JSON.stringify(u)); 
                     setUser(u); 
                     setView('home'); 
-                    setTimeout(pullDataFromSupabase, 100); 
                 };
                 
                 const handleLogout = () => { 
@@ -802,30 +639,16 @@
                 const handleTopicSelect = (topic) => { setActiveTopic(topic); setView('subtopic'); };
                 
                 const handleStartWorkout = (subtopic, srModeOverride, timerVal) => { 
-                    setWorkoutConfig({ subtopic, srMode: srModeOverride, timerSetting: timerVal, questionsData: null, initialIndex: 0, readOnly: false }); 
+                    setWorkoutConfig({ subtopic, srMode: srModeOverride, timerSetting: timerVal, questionsData: null, initialIndex: 0 }); 
                     setView('workout'); 
-                };
-
-                // --- NEW: Handle Search Select ---
-                const handleSearchSelect = (question) => {
-                    setWorkoutConfig({ 
-                        subtopic: "Search Practice", 
-                        srMode: false, // Force off SR mode for UI
-                        timerSetting: null, 
-                        questionsData: [question], // Only this question
-                        initialIndex: 0,
-                        readOnly: true // Enable read-only mode (no saving)
-                    });
-                    setView('workout');
                 };
 
                 return (
                     <div>
                         {view === 'login' && <Auth onLogin={handleLogin} />}
-                        {view === 'home' && <Home user={user} onSelectTopic={handleTopicSelect} onLogout={handleLogout} globalSrMode={appSrMode} setGlobalSrMode={setAppSrMode} onSync={pullDataFromSupabase} />}
-                        {view === 'subtopic' && <SubtopicView topic={activeTopic} globalSrMode={appSrMode} setGlobalSrMode={setAppSrMode} onBack={() => setView('home')} onStartWorkout={handleStartWorkout} user={user} onSync={pullDataFromSupabase} onSearchSelect={handleSearchSelect} />}
+                        {view === 'home' && <Home user={user} onSelectTopic={handleTopicSelect} onLogout={handleLogout} globalSrMode={appSrMode} setGlobalSrMode={setAppSrMode} />}
+                        {view === 'subtopic' && <SubtopicView topic={activeTopic} globalSrMode={appSrMode} setGlobalSrMode={setAppSrMode} onBack={() => setView('home')} onStartWorkout={handleStartWorkout} user={user} />}
                         {view === 'workout' && <WorkoutView {...workoutConfig} onBack={() => setView('subtopic')} user={user} />}
-                        <NetworkStatus isOnline={isOnline} isSyncing={isSyncing} pendingCount={pendingCount} />
                     </div>
                 );
             };
