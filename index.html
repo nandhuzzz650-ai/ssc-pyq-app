@@ -21,6 +21,8 @@
         body { font-family: 'Inter', sans-serif; background-color: #f0f9ff; padding-bottom: 80px; }
         .slide-in { animation: slideIn 0.3s ease-out; }
         @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .pop-in { animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes popIn { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #f1f5f9; }
         ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
@@ -290,7 +292,6 @@
                         if (trimmed.length >= 2) {
                             setIsSearching(true);
                             try {
-                                // --- UPDATED TO USE THE NEW DB COLUMN 'search_text' ---
                                 const { data, error } = await supabase
                                     .from('questions')
                                     .select('*')
@@ -461,6 +462,48 @@
                 );
             };
 
+            const SessionComplete = ({ stats, onBack }) => {
+                return (
+                    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 pop-in">
+                        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center border-t-4 border-yellow-400">
+                            <div className="flex justify-center mb-4">
+                                <div className="bg-yellow-100 p-4 rounded-full">
+                                    <Icon name="Trophy" size={48} className="text-yellow-500" />
+                                </div>
+                            </div>
+                            <h2 className="text-3xl font-extrabold text-slate-800 mb-2">Session Complete!</h2>
+                            <p className="text-slate-500 mb-8">Great job crushing your goals.</p>
+                            
+                            <div className="bg-slate-50 rounded-xl p-6 mb-6">
+                                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wide mb-4 border-b pb-2">Session Review</h3>
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-slate-600 font-medium">Questions Answered</span>
+                                        <span className="font-bold text-slate-800">{stats.total}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-500"></div> Correct / Good</span>
+                                        <span className="font-bold text-green-600">{stats.correct}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-orange-400"></div> Hard</span>
+                                        <span className="font-bold text-orange-500">{stats.hard}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-400"></div> Review Later</span>
+                                        <span className="font-bold text-red-500">{stats.again}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button onClick={onBack} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-md">
+                                Back to Dashboard
+                            </button>
+                        </div>
+                    </div>
+                );
+            };
+
             const WorkoutView = ({ subtopic, questionsData, initialIndex, srMode, timerSetting, onBack, user }) => {
                 const isCustomList = questionsData && questionsData.length > 0;
                 const [questions, setQuestions] = useState(isCustomList ? questionsData : []);
@@ -469,6 +512,10 @@
                 const [timeLeft, setTimeLeft] = useState(timerSetting || 0);
                 const [selectedOption, setSelectedOption] = useState(null); 
                 const [isRevealed, setIsRevealed] = useState(false);
+                
+                // --- NEW SESSION STATS ---
+                const [sessionFinished, setSessionFinished] = useState(false);
+                const [sessionStats, setSessionStats] = useState({ total: 0, correct: 0, hard: 0, again: 0 });
 
                 const currentQ = questions[currentIdx];
                 const getQText = (q) => q.question_text || q.q_text || "Error: Missing Text";
@@ -550,6 +597,17 @@
                     if (isRevealed) return;
                     setSelectedOption(index);
                     setIsRevealed(true);
+                    
+                    // Basic stat tracking for non-SR mode
+                    if (!srMode) {
+                        const isCorrect = index === currentQ.correct_index;
+                        setSessionStats(prev => ({
+                            ...prev,
+                            total: prev.total + 1,
+                            correct: isCorrect ? prev.correct + 1 : prev.correct,
+                            again: !isCorrect ? prev.again + 1 : prev.again
+                        }));
+                    }
                 };
 
                 const handlePrev = () => {
@@ -580,13 +638,20 @@
                              const key = `completed_${user.id}_${subtopic}`; 
                              localStorage.removeItem(key); 
                         }
-                        alert("Workout Complete! Round reset."); 
-                        onBack();
+                        setSessionFinished(true); // Trigger Animation + Summary
                     }
                 };
 
                 const handleReview = async (qualityScore) => {
-                    // --- CRITICAL FIX: Ensure no SR progress is saved for custom searches ---
+                    // Update Session Stats for SR Mode
+                    setSessionStats(prev => ({
+                        ...prev,
+                        total: prev.total + 1,
+                        correct: (qualityScore >= 4) ? prev.correct + 1 : prev.correct,
+                        hard: (qualityScore === 3) ? prev.hard + 1 : prev.hard,
+                        again: (qualityScore < 3) ? prev.again + 1 : prev.again
+                    }));
+
                     if (isCustomList) { handleNext(); return; }
                     
                     const progress = currentQ.progress || { easiness_factor: 2.5, repetitions: 0, interval: 0 };
@@ -613,17 +678,14 @@
                     handleNext();
                 };
 
+                if (sessionFinished) {
+                    return <SessionComplete stats={sessionStats} onBack={onBack} />;
+                }
+
                 if (loading) return <div className="min-h-screen flex items-center justify-center text-blue-600 font-bold">Loading Questions...</div>;
-                if (!currentQ) return (
-                    <div className="min-h-screen flex flex-col items-center justify-center p-4 text-center">
-                        <div className="bg-white p-8 rounded-xl shadow-lg">
-                            <Icon name="CheckCircle" size={48} className="text-green-500 mx-auto mb-4"/>
-                            <h2 className="text-xl font-bold text-slate-800">All caught up!</h2>
-                            <p className="text-slate-500 mb-6">{srMode ? "No questions due for review." : "No questions found in this topic."}</p>
-                            <button onClick={onBack} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold">Go Back</button>
-                        </div>
-                    </div>
-                );
+                
+                // --- If entering a mode with 0 questions initially (nothing due) ---
+                if (!currentQ) return <SessionComplete stats={{total: 0, correct: 0, hard: 0, again: 0}} onBack={onBack} />;
 
                 return (
                     <div className="min-h-screen bg-slate-50 flex flex-col items-center pb-20">
@@ -672,8 +734,8 @@
                                         isRevealed && (
                                             <div className="grid grid-cols-4 gap-3">
                                                 <button onClick={() => handleReview(0)} className="flex flex-col items-center py-2 bg-red-50 text-red-600 rounded-lg"><span className="text-xs font-bold">Again</span><span className="text-[10px]">&lt; 1m</span></button>
-                                                <button onClick={() => handleReview(3)} className="flex flex-col items-center py-2 bg-orange-50 text-orange-600 rounded-lg"><span className="text-xs font-bold">Hard</span><span className="text-[10px]">12h</span></button>
-                                                <button onClick={() => handleReview(4)} className="flex flex-col items-center py-2 bg-blue-50 text-blue-600 rounded-lg"><span className="text-xs font-bold">Good</span><span className="text-[10px]">1d</span></button>
+                                                <button onClick={() => handleReview(3)} className="flex flex-col items-center py-2 bg-orange-50 text-orange-600 rounded-lg"><span className="text-xs font-bold">Hard</span><span className="text-[10px]">1d</span></button>
+                                                <button onClick={() => handleReview(4)} className="flex flex-col items-center py-2 bg-blue-50 text-blue-600 rounded-lg"><span className="text-xs font-bold">Good</span><span className="text-[10px]">2d</span></button>
                                                 <button onClick={() => handleReview(5)} className="flex flex-col items-center py-2 bg-green-50 text-green-600 rounded-lg"><span className="text-xs font-bold">Easy</span><span className="text-[10px]">4d</span></button>
                                             </div>
                                         )
