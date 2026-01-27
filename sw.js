@@ -1,36 +1,29 @@
-const CACHE_NAME = 'daily-intellect-v10';
-const ASSETS = [
-  '/',
-  'index.html',
-  'manifest.json',
-  'icon.png',
+const CACHE_NAME = 'ssc-app-v1';
+const ASSETS_TO_CACHE = [
+  './index.html',
+  './manifest.json',
+  './icon.png',
+  'https://unpkg.com/react@18/umd/react.development.js',
+  'https://unpkg.com/react-dom@18/umd/react-dom.development.js',
+  'https://unpkg.com/@babel/standalone/babel.min.js',
   'https://cdn.tailwindcss.com',
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap'
+  'https://unpkg.com/lucide@latest',
+  'https://unpkg.com/@supabase/supabase-js@2'
 ];
 
-self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
-  );
-  self.skipWaiting();
-});
-
-self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    Promise.all([
-      self.clients.claim(),
-      caches.keys().then(keys => Promise.all(
-        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
-      ))
-    ])
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
   );
 });
 
-self.addEventListener('fetch', (e) => {
-  e.respondWith(
-    caches.match(e.request).then((res) => {
-      return res || fetch(e.request);
+self.addEventListener('fetch', (event) => {
+  // Ignore Supabase API calls in SW (Handled by App Sync Logic)
+  if (event.request.url.includes('supabase.co')) return;
+
+  event.respondWith(
+    caches.match(event.request).then((response) => {
+      return response || fetch(event.request);
     })
   );
 });

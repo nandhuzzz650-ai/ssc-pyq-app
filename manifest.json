@@ -1,17 +1,20 @@
 {
-  "name": "Daily Intellect SSC PYQ",
-  "short_name": "SSC PYQS",
-  "start_url": "index.html",
+  "name": "SSC PYQs Daily Intellect",
+  "short_name": "SSC PYQs",
+  "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#D32F2F",
-  "description": "Personalized Learning System for SSC PYQs",
+  "background_color": "#f0f9ff",
+  "theme_color": "#2563eb",
   "icons": [
     {
-      "src": "icon.png",
+      "src": "./icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./icon.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     }
   ]
 }
