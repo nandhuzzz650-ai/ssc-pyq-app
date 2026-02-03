@@ -23,6 +23,8 @@
         @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .pop-in { animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         @keyframes popIn { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
+        /* Image responsiveness fix */
+        .q-content img { max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0; display: block; }
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #f1f5f9; }
         ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
@@ -45,7 +47,8 @@
             const SUPABASE_URL = "https://lkwciklwwssrwzgecrvv.supabase.co";
             const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxrd2Npa2x3d3Nzcnd6Z2VjcnZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5NjAwNjYsImV4cCI6MjA4NDUzNjA2Nn0.l-M24USVWXR_WOJLP0vP3MtXfCsllU9n1VXOau9JN8A";
             
-            const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            // Fix: Changed "supabase.createClient" to "supabase.createClient" for correct library access
+            const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             const { useState, useEffect, useRef } = React;
 
             // --- 2. ICON HELPER ---
@@ -88,10 +91,8 @@
             const calculateSM2 = (quality, prevEf, prevRepetitions, prevInterval) => {
                 let nextEf = prevEf + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
                 if (nextEf < 1.3) nextEf = 1.3;
-                
                 let nextRepetitions = quality < 3 ? 0 : prevRepetitions + 1;
                 let nextInterval;
-                
                 if (quality < 3) { 
                     nextInterval = 0; 
                 } else {
@@ -106,7 +107,6 @@
                     }
                 }
                 if (nextInterval < 1 && quality >= 3) nextInterval = 1;
-                
                 return { ef: nextEf, reps: nextRepetitions, interval: nextInterval };
             };
 
@@ -122,7 +122,7 @@
                 const handleLogin = async (e) => {
                     e.preventDefault(); setLoading(true); setError('');
                     try {
-                        const { data, error } = await supabase.from('users').select('*').eq('username', formData.username).eq('password', formData.password).single();
+                        const { data, error } = await supabaseClient.from('users').select('*').eq('username', formData.username).eq('password', formData.password).single();
                         if (error || !data) throw new Error("Invalid username or password");
                         onLogin(data);
                     } catch (err) { setError(err.message); } finally { setLoading(false); }
@@ -130,9 +130,9 @@
                 const handleSignup = async (e) => {
                     e.preventDefault(); setLoading(true); setError('');
                     try {
-                        const { data: existing } = await supabase.from('users').select('id').eq('username', formData.username).single();
+                        const { data: existing } = await supabaseClient.from('users').select('id').eq('username', formData.username).single();
                         if (existing) throw new Error("Username already taken");
-                        const { data, error } = await supabase.from('users').insert([{ username: formData.username, password: formData.password, recovery_question: formData.recoveryQ, recovery_answer: formData.recoveryA }]).select().single();
+                        const { data, error } = await supabaseClient.from('users').insert([{ username: formData.username, password: formData.password, recovery_question: formData.recoveryQ, recovery_answer: formData.recoveryA }]).select().single();
                         if (error) throw error;
                         alert("Account created successfully!");
                         onLogin(data);
@@ -141,7 +141,7 @@
                 const handleFetchQuestion = async (e) => {
                     e.preventDefault(); setLoading(true); setError('');
                     try {
-                        const { data, error } = await supabase.from('users').select('recovery_question').eq('username', formData.username).single();
+                        const { data, error } = await supabaseClient.from('users').select('recovery_question').eq('username', formData.username).single();
                         if (error || !data) throw new Error("User not found");
                         setFetchedQuestion(data.recovery_question);
                     } catch (err) { setError(err.message); } finally { setLoading(false); }
@@ -149,7 +149,7 @@
                 const handleResetPassword = async (e) => {
                     e.preventDefault(); setLoading(true); setError('');
                     try {
-                        const { data, error } = await supabase.from('users').update({ password: formData.newPassword }).eq('username', formData.username).eq('recovery_answer', formData.recoveryA).select();
+                        const { data, error } = await supabaseClient.from('users').update({ password: formData.newPassword }).eq('username', formData.username).eq('recovery_answer', formData.recoveryA).select();
                         if (error) throw error;
                         if (data.length === 0) throw new Error("Incorrect Recovery Answer");
                         alert("Password reset successfully! Please login.");
@@ -261,7 +261,6 @@
                     const saved = localStorage.getItem('ssc_timer_enabled');
                     return saved !== null ? JSON.parse(saved) : true;
                 });
-
                 const [timerValue, setTimerValue] = useState(() => {
                     const saved = localStorage.getItem(`ssc_timer_value_${topic}`);
                     const val = saved ? parseInt(saved) : TOPICS[topic].timerRange.min;
@@ -269,19 +268,15 @@
                         ? val 
                         : TOPICS[topic].timerRange.min;
                 });
-                
                 useEffect(() => {
                     localStorage.setItem('ssc_timer_enabled', JSON.stringify(timerEnabled));
                 }, [timerEnabled]);
-
                 useEffect(() => {
                     localStorage.setItem(`ssc_timer_value_${topic}`, timerValue);
                 }, [timerValue, topic]);
 
                 const [topicStats, setTopicStats] = useState({});
                 const [loadingStats, setLoadingStats] = useState(true);
-
-                // --- SEARCH STATE ---
                 const [searchTerm, setSearchTerm] = useState('');
                 const [searchResults, setSearchResults] = useState([]);
                 const [isSearching, setIsSearching] = useState(false);
@@ -292,19 +287,16 @@
                         if (trimmed.length >= 2) {
                             setIsSearching(true);
                             try {
-                                const { data, error } = await supabase
+                                const { data, error } = await supabaseClient
                                     .from('questions')
                                     .select('*')
                                     .eq('topic', topic)
                                     .ilike('search_text', `%${trimmed}%`)
                                     .limit(20);
-                                    
                                 if (!error && data) {
                                     setSearchResults(data);
-                                } else if (error) {
-                                    console.error("Search Error:", error); 
                                 }
-                            } catch (error) { console.error("Search Try/Catch Error:", error); }
+                            } catch (error) { console.error(error); }
                             setIsSearching(false);
                         } else {
                             setSearchResults([]);
@@ -313,34 +305,23 @@
                     return () => clearTimeout(delayDebounceFn);
                 }, [searchTerm, topic]);
 
-
                 useEffect(() => {
                     const fetchTopicStats = async () => {
                         setLoadingStats(true);
                         let qData = [];
-                        const { data: d1 } = await supabase.from('questions').select('id, subtopic').eq('topic', topic).limit(5000);
-                        if(d1 && d1.length > 0) qData = d1;
-                        if(qData.length === 0) {
-                             const { data: d2 } = await supabase.from('questions').select('id, subtopic').limit(5000); 
-                             qData = d2 || []; 
-                        }
-
+                        const { data: d1 } = await supabaseClient.from('questions').select('id, subtopic').eq('topic', topic).limit(5000);
+                        qData = d1 || [];
                         const qIds = qData.map(q => q.id);
                         if (qIds.length === 0) { setTopicStats({}); setLoadingStats(false); return; }
-
-                        const { data: prog } = await supabase.from('user_progress').select('question_id, next_review').eq('user_id', user.id).in('question_id', qIds);
-                        
+                        const { data: prog } = await supabaseClient.from('user_progress').select('question_id, next_review').eq('user_id', user.id).in('question_id', qIds);
                         const progMap = {};
                         (prog || []).forEach(p => progMap[String(p.question_id)] = p);
-                        
                         const newStats = {};
                         const now = new Date();
-
                         qData.forEach(q => {
                             if (!q.subtopic) return;
                             const subKey = normalizeText(q.subtopic);
                             if (!newStats[subKey]) newStats[subKey] = { new: 0, due: 0 };
-                            
                             const p = progMap[String(q.id)];
                             if (!p) newStats[subKey].new += 1;
                             else if (new Date(p.next_review) <= now) newStats[subKey].due += 1;
@@ -358,7 +339,6 @@
                         return saved ? JSON.parse(saved).length : 0;
                     } catch(e) { return 0; }
                 };
-                
                 const resetProgress = (e, sub) => {
                     e.stopPropagation(); 
                     const key = `completed_${user.id}_${sub}`; 
@@ -373,40 +353,24 @@
                             <h2 className="text-xl font-bold text-blue-900">{topic}</h2>
                         </div>
                         <div className="max-w-4xl mx-auto w-full p-4 flex-grow">
-                            
-                            {/* --- NEW SEARCH BAR --- */}
                             <div className="bg-white rounded-xl shadow-sm p-4 mb-6 border border-slate-100 relative">
                                 <div className="relative">
                                     <div className="absolute left-3 top-3 text-slate-400"><Icon name="Search" size={20} /></div>
-                                    <input 
-                                        type="text" 
-                                        placeholder={`Search for questions in ${topic}...`} 
-                                        className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                    />
+                                    <input type="text" placeholder={`Search for questions in ${topic}...`} className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                                 </div>
                                 {searchTerm.trim().length >= 2 && (
                                     <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto">
-                                        {isSearching ? (
-                                            <div className="p-4 text-center text-slate-500 text-sm">Searching...</div>
-                                        ) : searchResults.length === 0 ? (
-                                            <div className="p-4 text-center text-slate-500 text-sm">No matches found.</div>
-                                        ) : (
+                                        {isSearching ? <div className="p-4 text-center text-slate-500 text-sm">Searching...</div> : searchResults.length === 0 ? <div className="p-4 text-center text-slate-500 text-sm">No matches found.</div> : 
                                             <ul>
-                                                {searchResults.map((q) => {
-                                                    const text = q.question_text || "No Question Text";
-                                                    return (
-                                                        <li key={q.id} onClick={() => onSearchSelect(q)} className="p-3 border-b border-slate-50 hover:bg-blue-50 cursor-pointer transition-colors last:border-0 text-sm text-slate-700">
-                                                            <div className="flex justify-between items-start mb-1">
-                                                                <span className="font-bold text-blue-600 text-xs bg-blue-50 px-2 py-0.5 rounded-full">{q.subtopic || 'General'}</span>
-                                                            </div>
-                                                            <p className="line-clamp-2">{text}</p>
-                                                        </li>
-                                                    );
-                                                })}
+                                                {searchResults.map((q) => (
+                                                    <li key={q.id} onClick={() => onSearchSelect(q)} className="p-3 border-b border-slate-50 hover:bg-blue-50 cursor-pointer transition-colors last:border-0 text-sm text-slate-700">
+                                                        <div className="flex justify-between items-start mb-1"><span className="font-bold text-blue-600 text-xs bg-blue-50 px-2 py-0.5 rounded-full">{q.subtopic || 'General'}</span></div>
+                                                        {/* Fix: Render search result snippets with dangerouslySetInnerHTML to allow images to be recognized */}
+                                                        <div className="line-clamp-2 q-content" dangerouslySetInnerHTML={{ __html: q.question_text || "No Question Text" }}></div>
+                                                    </li>
+                                                ))}
                                             </ul>
-                                        )}
+                                        }
                                     </div>
                                 )}
                             </div>
@@ -448,9 +412,7 @@
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-3">
-                                                {!globalSrMode && progressCount > 0 && (
-                                                    <div onClick={(e) => resetProgress(e, sub)} className="p-2 bg-slate-100 hover:bg-red-100 text-slate-400 hover:text-red-500 rounded-full transition-colors" title="Reset Progress"><Icon name="RotateCcw" size={14} /></div>
-                                                )}
+                                                {!globalSrMode && progressCount > 0 && <div onClick={(e) => resetProgress(e, sub)} className="p-2 bg-slate-100 hover:bg-red-100 text-slate-400 hover:text-red-500 rounded-full transition-colors" title="Reset Progress"><Icon name="RotateCcw" size={14} /></div>}
                                                 <div className="bg-blue-50 text-blue-600 p-1.5 rounded-full"><Icon name="ChevronRight" size={16} /></div>
                                             </div>
                                         </button>
@@ -466,39 +428,19 @@
                 return (
                     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 pop-in">
                         <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center border-t-4 border-yellow-400">
-                            <div className="flex justify-center mb-4">
-                                <div className="bg-yellow-100 p-4 rounded-full">
-                                    <Icon name="Trophy" size={48} className="text-yellow-500" />
-                                </div>
-                            </div>
+                            <div className="flex justify-center mb-4"><div className="bg-yellow-100 p-4 rounded-full"><Icon name="Trophy" size={48} className="text-yellow-500" /></div></div>
                             <h2 className="text-3xl font-extrabold text-slate-800 mb-2">Session Complete!</h2>
                             <p className="text-slate-500 mb-8">Great job crushing your goals.</p>
-                            
                             <div className="bg-slate-50 rounded-xl p-6 mb-6">
                                 <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wide mb-4 border-b pb-2">Session Review</h3>
                                 <div className="space-y-3">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-slate-600 font-medium">Questions Answered</span>
-                                        <span className="font-bold text-slate-800">{stats.total}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center text-sm">
-                                        <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-500"></div> Correct / Good</span>
-                                        <span className="font-bold text-green-600">{stats.correct}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center text-sm">
-                                        <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-orange-400"></div> Hard</span>
-                                        <span className="font-bold text-orange-500">{stats.hard}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center text-sm">
-                                        <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-400"></div> Review Later</span>
-                                        <span className="font-bold text-red-500">{stats.again}</span>
-                                    </div>
+                                    <div className="flex justify-between items-center"><span className="text-slate-600 font-medium">Questions Answered</span><span className="font-bold text-slate-800">{stats.total}</span></div>
+                                    <div className="flex justify-between items-center text-sm"><span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-500"></div> Correct / Good</span><span className="font-bold text-green-600">{stats.correct}</span></div>
+                                    <div className="flex justify-between items-center text-sm"><span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-orange-400"></div> Hard</span><span className="font-bold text-orange-500">{stats.hard}</span></div>
+                                    <div className="flex justify-between items-center text-sm"><span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-400"></div> Review Later</span><span className="font-bold text-red-500">{stats.again}</span></div>
                                 </div>
                             </div>
-
-                            <button onClick={onBack} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-md">
-                                Back to Dashboard
-                            </button>
+                            <button onClick={onBack} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-md">Back to Dashboard</button>
                         </div>
                     </div>
                 );
@@ -513,70 +455,46 @@
                 const [selectedOption, setSelectedOption] = useState(null); 
                 const [isRevealed, setIsRevealed] = useState(false);
                 const [hideOptions, setHideOptions] = useState(false);
-                
-                // --- NEW SESSION STATS ---
                 const [sessionFinished, setSessionFinished] = useState(false);
                 const [sessionStats, setSessionStats] = useState({ total: 0, correct: 0, hard: 0, again: 0 });
 
                 const currentQ = questions[currentIdx];
-                const getQText = (q) => q.question_text || q.q_text || "Error: Missing Text";
-                const getOptions = (q) => q.options || [];
 
                 useEffect(() => {
                     if (isCustomList) return;
                     const fetchQuestions = async () => {
                         setLoading(true);
                         let qData = [];
-                        const { data: d1, error: e1 } = await supabase.from('questions').select('*').ilike('subtopic', subtopic);
-                        if (!e1 && d1 && d1.length > 0) qData = d1;
-                        else {
-                            const { data: d2 } = await supabase.from('questions').select('*').ilike('topic', subtopic);
-                            if (d2) qData = d2;
-                        }
-                        
+                        const { data: d1 } = await supabaseClient.from('questions').select('*').ilike('subtopic', subtopic);
+                        qData = d1 || [];
                         let finalQuestions = qData || [];
-
-                        // --- 3. FILTER LOGIC: Remove completed questions before shuffle ---
                         if (!srMode) {
                             const key = `completed_${user.id}_${subtopic}`;
                             try {
                                 const saved = localStorage.getItem(key);
                                 const completedIds = saved ? JSON.parse(saved) : [];
-                                if (completedIds.length > 0) {
-                                    finalQuestions = finalQuestions.filter(q => !completedIds.includes(q.id));
-                                }
-                                if (finalQuestions.length === 0 && qData.length > 0) {
-                                     localStorage.removeItem(key);
-                                     finalQuestions = qData;
-                                }
-                            } catch(e) { console.error("Error filtering questions", e); }
+                                if (completedIds.length > 0) finalQuestions = finalQuestions.filter(q => !completedIds.includes(q.id));
+                                if (finalQuestions.length === 0 && qData.length > 0) { localStorage.removeItem(key); finalQuestions = qData; }
+                            } catch(e) { console.error(e); }
                         }
-
                         if (finalQuestions && finalQuestions.length > 0) {
                             for (let i = finalQuestions.length - 1; i > 0; i--) {
                                 const j = Math.floor(Math.random() * (i + 1));
                                 [finalQuestions[i], finalQuestions[j]] = [finalQuestions[j], finalQuestions[i]];
                             }
                         }
-
                         if (srMode) {
                             const qIds = finalQuestions.map(q => q.id);
-                            const { data: pData } = await supabase.from('user_progress').select('*').eq('user_id', user.id).in('question_id', qIds);
-                            
-                            const progMap = {};
-                            (pData||[]).forEach(p => progMap[String(p.question_id)] = p);
-
+                            const { data: pData } = await supabaseClient.from('user_progress').select('*').eq('user_id', user.id).in('question_id', qIds);
+                            const progMap = {}; (pData||[]).forEach(p => progMap[String(p.question_id)] = p);
                             const now = new Date();
                             finalQuestions = finalQuestions.filter(q => {
                                 const prog = progMap[String(q.id)];
                                 return !prog || new Date(prog.next_review) <= now;
                             });
                             finalQuestions = finalQuestions.map(q => ({ ...q, progress: progMap[String(q.id)] }));
-                            setQuestions(finalQuestions);
-                        } else {
-                            setQuestions(finalQuestions);
-                            setCurrentIdx(0); 
                         }
+                        setQuestions(finalQuestions);
                         setLoading(false);
                     };
                     fetchQuestions();
@@ -589,103 +507,45 @@
                 }, [timeLeft, isRevealed, timerSetting]);
 
                 useEffect(() => {
-                    if (timerSetting && timeLeft === 0 && !isRevealed) {
-                        setIsRevealed(true);
-                    }
+                    if (timerSetting && timeLeft === 0 && !isRevealed) setIsRevealed(true);
                 }, [timeLeft, timerSetting, isRevealed]);
 
                 const handleOptionClick = (index) => {
                     if (isRevealed) return;
                     setSelectedOption(index);
                     setIsRevealed(true);
-                    
-                    // Basic stat tracking for non-SR mode
                     if (!srMode) {
                         const isCorrect = index === currentQ.correct_index;
-                        setSessionStats(prev => ({
-                            ...prev,
-                            total: prev.total + 1,
-                            correct: isCorrect ? prev.correct + 1 : prev.correct,
-                            again: !isCorrect ? prev.again + 1 : prev.again
-                        }));
+                        setSessionStats(prev => ({ ...prev, total: prev.total + 1, correct: isCorrect ? prev.correct + 1 : prev.correct, again: !isCorrect ? prev.again + 1 : prev.again }));
                     }
                 };
 
-                const handlePrev = () => {
-                    if(currentIdx > 0) {
-                        const prevIdx = currentIdx - 1;
-                        setIsRevealed(false); setSelectedOption(null); setTimeLeft(timerSetting || 0); setCurrentIdx(prevIdx);
-                    }
-                };
+                const handlePrev = () => { if(currentIdx > 0) { setIsRevealed(false); setSelectedOption(null); setTimeLeft(timerSetting || 0); setCurrentIdx(currentIdx - 1); } };
 
                 const handleNext = () => {
-                    // --- 4. SAVE PROGRESS: Add ID to ignored list ---
                     if (!srMode && !isCustomList) {
                         const key = `completed_${user.id}_${subtopic}`;
                         const saved = localStorage.getItem(key);
                         const completedIds = saved ? JSON.parse(saved) : [];
-                        if (!completedIds.includes(currentQ.id)) {
-                            completedIds.push(currentQ.id);
-                            localStorage.setItem(key, JSON.stringify(completedIds));
-                        }
+                        if (!completedIds.includes(currentQ.id)) { completedIds.push(currentQ.id); localStorage.setItem(key, JSON.stringify(completedIds)); }
                     }
-
-                    if (currentIdx < questions.length - 1) {
-                        const nextIdx = currentIdx + 1;
-                        setIsRevealed(false); setSelectedOption(null); setTimeLeft(timerSetting || 0); setCurrentIdx(nextIdx);
-                    } else {
-                        // --- 5. FINISH: Clear list to restart ---
-                        if (!srMode && !isCustomList) { 
-                             const key = `completed_${user.id}_${subtopic}`; 
-                             localStorage.removeItem(key); 
-                        }
-                        setSessionFinished(true); // Trigger Animation + Summary
-                    }
+                    if (currentIdx < questions.length - 1) { setIsRevealed(false); setSelectedOption(null); setTimeLeft(timerSetting || 0); setCurrentIdx(currentIdx + 1); } 
+                    else { if (!srMode && !isCustomList) localStorage.removeItem(`completed_${user.id}_${subtopic}`); setSessionFinished(true); }
                 };
 
                 const handleReview = async (qualityScore) => {
-                    // Update Session Stats for SR Mode
-                    setSessionStats(prev => ({
-                        ...prev,
-                        total: prev.total + 1,
-                        correct: (qualityScore >= 4) ? prev.correct + 1 : prev.correct,
-                        hard: (qualityScore === 3) ? prev.hard + 1 : prev.hard,
-                        again: (qualityScore < 3) ? prev.again + 1 : prev.again
-                    }));
-
+                    setSessionStats(prev => ({ ...prev, total: prev.total + 1, correct: (qualityScore >= 4) ? prev.correct + 1 : prev.correct, hard: (qualityScore === 3) ? prev.hard + 1 : prev.hard, again: (qualityScore < 3) ? prev.again + 1 : prev.again }));
                     if (isCustomList) { handleNext(); return; }
-                    
                     const progress = currentQ.progress || { easiness_factor: 2.5, repetitions: 0, interval: 0 };
-                    const prevEf = progress.easiness_factor || 2.5; 
-                    
-                    const results = calculateSM2(qualityScore, prevEf, progress.repetitions, progress.interval);
-                    
-                    const nextDate = new Date();
-                    nextDate.setTime(nextDate.getTime() + (results.interval * 24 * 60 * 60 * 1000));
-                    
-                    try {
-                        await supabase.from('user_progress').upsert({
-                            user_id: user.id,
-                            question_id: currentQ.id,
-                            easiness_factor: results.ef,
-                            repetitions: results.reps,
-                            interval: results.interval,
-                            next_review: nextDate.toISOString(),
-                            last_reviewed: new Date().toISOString()
-                        }, { onConflict: 'user_id, question_id' });
-                    } catch(e) { console.error("Save failed", e); }
-                    
+                    const results = calculateSM2(qualityScore, progress.easiness_factor || 2.5, progress.repetitions, progress.interval);
+                    const nextDate = new Date(); nextDate.setTime(nextDate.getTime() + (results.interval * 24 * 60 * 60 * 1000));
+                    try { await supabaseClient.from('user_progress').upsert({ user_id: user.id, question_id: currentQ.id, easiness_factor: results.ef, repetitions: results.reps, interval: results.interval, next_review: nextDate.toISOString(), last_reviewed: new Date().toISOString() }, { onConflict: 'user_id, question_id' }); } catch(e) { console.error(e); }
                     if (qualityScore < 3) setQuestions(prev => [...prev, currentQ]);
                     handleNext();
                 };
 
-                if (sessionFinished) {
-                    return <SessionComplete stats={sessionStats} onBack={onBack} />;
-                }
-
+                if (sessionFinished) return <SessionComplete stats={sessionStats} onBack={onBack} />;
                 if (loading) return <div className="min-h-screen flex items-center justify-center text-blue-600 font-bold">Loading Questions...</div>;
-                
-                // --- If entering a mode with 0 questions initially (nothing due) ---
                 if (!currentQ) return <SessionComplete stats={{total: 0, correct: 0, hard: 0, again: 0}} onBack={onBack} />;
 
                 return (
@@ -699,69 +559,54 @@
                             <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
                                 <div className="flex justify-between items-center mb-2">
                                     <div className="text-xs font-bold text-blue-500 uppercase tracking-wide">Question {currentIdx + 1} / {questions.length}</div>
-                                    {srMode && (
-                                        <button onClick={() => setHideOptions(!hideOptions)} className={`text-xs font-bold px-2 py-1 rounded transition-colors ${hideOptions ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                                            {hideOptions ? 'Show Options' : 'Hide Options'}
-                                        </button>
-                                    )}
+                                    {srMode && <button onClick={() => setHideOptions(!hideOptions)} className={`text-xs font-bold px-2 py-1 rounded transition-colors ${hideOptions ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{hideOptions ? 'Show Options' : 'Hide Options'}</button>}
                                 </div>
-                                <p className="text-lg text-slate-800 leading-relaxed font-medium">{getQText(currentQ)}</p>
+                                {/* Fix: Use dangerouslySetInnerHTML to render question content containing images */}
+                                <div className="text-lg text-slate-800 leading-relaxed font-medium q-content" dangerouslySetInnerHTML={{ __html: currentQ.question_text || currentQ.q_text || "Error" }}></div>
                             </div>
 
-                            {srMode && hideOptions && !isRevealed ? (
-                                <div className="mb-6">
-                                    <button onClick={() => setIsRevealed(true)} className="w-full py-10 bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 font-bold hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600 transition-all flex flex-col items-center gap-2">
-                                        <Icon name="Eye" size={24} />
-                                        <span>Show Answer</span>
-                                    </button>
-                                </div>
-                            ) : (
+                            {srMode && hideOptions && !isRevealed ? <button onClick={() => setIsRevealed(true)} className="w-full py-10 bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 font-bold hover:bg-blue-50 transition-all flex flex-col items-center gap-2"><Icon name="Eye" size={24} /><span>Show Answer</span></button> : 
                                 <div className="mb-6 space-y-3">
-                                    {getOptions(currentQ).map((opt, idx) => {
+                                    {(currentQ.options || []).map((opt, idx) => {
                                         let style = "w-full p-4 rounded-xl border-2 text-left transition-all mb-3 flex justify-between items-center bg-white ";
                                         if (isRevealed) {
                                             if (idx === currentQ.correct_index) style += "border-green-500 bg-green-50 text-green-700 font-medium";
                                             else if (idx === selectedOption) style += "border-red-500 bg-red-50 text-red-700";
                                             else style += "border-slate-100 opacity-60";
-                                        } else {
-                                            style += "border-slate-100 hover:border-blue-300 text-slate-700";
-                                        }
+                                        } else style += "border-slate-100 hover:border-blue-300 text-slate-700";
+                                        
                                         return (
                                             <button key={idx} onClick={() => handleOptionClick(idx)} className={style} disabled={isRevealed && srMode}>
-                                                <span>{opt}</span>
+                                                {/* Fix: Render option content with dangerouslySetInnerHTML for image support in options */}
+                                                <div className="q-content" dangerouslySetInnerHTML={{ __html: opt }}></div>
                                                 {isRevealed && idx === currentQ.correct_index && <Icon name="CheckCircle" className="text-green-500" size={20}/>}
                                                 {isRevealed && idx === selectedOption && idx !== currentQ.correct_index && <Icon name="XCircle" className="text-red-500" size={20}/>}
                                             </button>
                                         );
                                     })}
                                 </div>
-                            )}
+                            }
 
                             {isRevealed && (
                                 <div className="slide-in mb-6">
                                     <div className="bg-blue-50 border border-blue-100 rounded-xl p-5">
                                         <h4 className="font-bold text-blue-800 mb-2 flex items-center gap-2"><Icon name="BookOpen" size={18}/> Explanation</h4>
-                                        <p className="text-slate-700 text-sm leading-relaxed">{currentQ.explanation}</p>
+                                        {/* Fix: Render explanation with dangerouslySetInnerHTML for image support */}
+                                        <div className="text-slate-700 text-sm leading-relaxed q-content" dangerouslySetInnerHTML={{ __html: currentQ.explanation }}></div>
                                     </div>
                                 </div>
                             )}
                             <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 shadow-lg">
                                 <div className="max-w-2xl mx-auto">
-                                    {srMode && !isCustomList ? (
-                                        isRevealed && (
-                                            <div className="grid grid-cols-4 gap-3">
-                                                <button onClick={() => handleReview(0)} className="flex flex-col items-center py-2 bg-red-50 text-red-600 rounded-lg"><span className="text-xs font-bold">Again</span><span className="text-[10px]">&lt; 1m</span></button>
-                                                <button onClick={() => handleReview(3)} className="flex flex-col items-center py-2 bg-orange-50 text-orange-600 rounded-lg"><span className="text-xs font-bold">Hard</span><span className="text-[10px]">1d</span></button>
-                                                <button onClick={() => handleReview(4)} className="flex flex-col items-center py-2 bg-blue-50 text-blue-600 rounded-lg"><span className="text-xs font-bold">Good</span><span className="text-[10px]">2d</span></button>
-                                                <button onClick={() => handleReview(5)} className="flex flex-col items-center py-2 bg-green-50 text-green-600 rounded-lg"><span className="text-xs font-bold">Easy</span><span className="text-[10px]">4d</span></button>
-                                            </div>
-                                        )
-                                    ) : (
-                                        <div className="flex justify-between w-full">
-                                            <button onClick={handlePrev} disabled={currentIdx === 0} className={`flex items-center gap-1 font-bold px-6 py-2 rounded-lg transition-colors ${currentIdx === 0 ? 'text-slate-300 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-50'}`}><Icon name="ChevronLeft" size={20} /> Prev</button>
-                                            <button onClick={handleNext} className="flex items-center gap-1 bg-blue-600 text-white font-bold px-8 py-2 rounded-lg hover:bg-blue-700 shadow-md">Next <Icon name="ChevronRight" size={20} /></button>
-                                        </div>
-                                    )}
+                                    {srMode && !isCustomList ? (isRevealed && <div className="grid grid-cols-4 gap-3">
+                                        <button onClick={() => handleReview(0)} className="flex flex-col items-center py-2 bg-red-50 text-red-600 rounded-lg"><span className="text-xs font-bold">Again</span><span className="text-[10px]">&lt; 1m</span></button>
+                                        <button onClick={() => handleReview(3)} className="flex flex-col items-center py-2 bg-orange-50 text-orange-600 rounded-lg"><span className="text-xs font-bold">Hard</span><span className="text-[10px]">1d</span></button>
+                                        <button onClick={() => handleReview(4)} className="flex flex-col items-center py-2 bg-blue-50 text-blue-600 rounded-lg"><span className="text-xs font-bold">Good</span><span className="text-[10px]">2d</span></button>
+                                        <button onClick={() => handleReview(5)} className="flex flex-col items-center py-2 bg-green-50 text-green-600 rounded-lg"><span className="text-xs font-bold">Easy</span><span className="text-[10px]">4d</span></button>
+                                    </div>) : <div className="flex justify-between w-full">
+                                        <button onClick={handlePrev} disabled={currentIdx === 0} className={`flex items-center gap-1 font-bold px-6 py-2 rounded-lg ${currentIdx === 0 ? 'text-slate-300 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-50'}`}><Icon name="ChevronLeft" size={20} /> Prev</button>
+                                        <button onClick={handleNext} className="flex items-center gap-1 bg-blue-600 text-white font-bold px-8 py-2 rounded-lg hover:bg-blue-700 shadow-md">Next <Icon name="ChevronRight" size={20} /></button>
+                                    </div>}
                                 </div>
                             </div>
                         </div>
@@ -776,23 +621,18 @@
                 const [workoutConfig, setWorkoutConfig] = useState({});
                 const [appSrMode, setAppSrMode] = useState(true); 
 
-                // --- 1. HISTORY LISTENER ---
                 useEffect(() => {
                     const handlePopState = (e) => {
                         if (e.state) {
                             if (e.state.view) setView(e.state.view);
                             if (e.state.activeTopic) setActiveTopic(e.state.activeTopic);
                             if (e.state.workoutConfig) setWorkoutConfig(e.state.workoutConfig);
-                        } else {
-                            if (user) setView('home');
-                            else setView('login');
-                        }
+                        } else if (user) setView('home');
                     };
                     window.addEventListener('popstate', handlePopState);
                     return () => window.removeEventListener('popstate', handlePopState);
                 }, [user]);
 
-                // --- 2. APP REHYDRATION LOGIC (WITH STACK RECONSTRUCTION) ---
                 useEffect(() => {
                     const savedUser = localStorage.getItem('ssc_user');
                     if (savedUser) { 
@@ -808,7 +648,6 @@
                                     if (nav.workoutConfig) setWorkoutConfig(nav.workoutConfig);
                                     if (nav.appSrMode !== undefined) setAppSrMode(nav.appSrMode);
                                     
-                                    // --- CRITICAL FIX: RECONSTRUCT HISTORY STACK ---
                                     if (nav.view === 'subtopic') {
                                         window.history.replaceState({ view: 'home' }, '', '');
                                         window.history.pushState({ view: 'subtopic', activeTopic: nav.activeTopic }, '', '');
@@ -816,72 +655,29 @@
                                         window.history.replaceState({ view: 'home' }, '', '');
                                         window.history.pushState({ view: 'subtopic', activeTopic: nav.activeTopic }, '', '');
                                         window.history.pushState({ view: 'workout', activeTopic: nav.activeTopic, workoutConfig: nav.workoutConfig }, '', '');
-                                    } else {
-                                        window.history.replaceState({ view: 'home' }, '', '');
-                                    }
-
-                                } else {
-                                    setView('home'); 
-                                    window.history.replaceState({ view: 'home' }, '', '');
-                                }
+                                    } else window.history.replaceState({ view: 'home' }, '', '');
+                                } else { setView('home'); window.history.replaceState({ view: 'home' }, '', ''); }
                             } 
-                        } catch(e){
-                            console.error("Session restoration failed:", e);
-                            localStorage.removeItem('ssc_user');
-                        } 
+                        } catch(e){ localStorage.removeItem('ssc_user'); } 
                     }
                 }, []);
                 
-                // --- STATE PERSISTENCE LOGIC START ---
                 useEffect(() => {
-                    if (user) {
-                        try {
-                            const navState = { view, activeTopic, workoutConfig, appSrMode };
-                            localStorage.setItem('ssc_nav_state', JSON.stringify(navState));
-                        } catch (e) { console.error("Could not save nav state", e); }
-                    }
+                    if (user) localStorage.setItem('ssc_nav_state', JSON.stringify({ view, activeTopic, workoutConfig, appSrMode }));
                 }, [view, activeTopic, workoutConfig, appSrMode, user]);
 
-                const handleLogin = (u) => { 
-                    localStorage.setItem('ssc_user', JSON.stringify(u)); 
-                    setUser(u); 
-                    window.history.replaceState({ view: 'home' }, '', '');
-                    setView('home'); 
-                };
-                
-                const handleLogout = () => { 
-                    localStorage.removeItem('ssc_user'); 
-                    localStorage.removeItem('ssc_nav_state'); 
-                    window.location.reload(); 
-                };
-                
-                const handleTopicSelect = (topic) => { 
-                    const newState = { view: 'subtopic', activeTopic: topic };
-                    window.history.pushState(newState, '', '');
-                    setActiveTopic(topic); 
-                    setView('subtopic'); 
-                };
-                
+                const handleLogin = (u) => { localStorage.setItem('ssc_user', JSON.stringify(u)); setUser(u); window.history.replaceState({ view: 'home' }, '', ''); setView('home'); };
+                const handleLogout = () => { localStorage.removeItem('ssc_user'); localStorage.removeItem('ssc_nav_state'); window.location.reload(); };
+                const handleTopicSelect = (topic) => { window.history.pushState({ view: 'subtopic', activeTopic: topic }, '', ''); setActiveTopic(topic); setView('subtopic'); };
                 const handleStartWorkout = (subtopic, srModeOverride, timerVal) => { 
                     const config = { subtopic, srMode: srModeOverride, timerSetting: timerVal, questionsData: null, initialIndex: 0 };
-                    const newState = { view: 'workout', workoutConfig: config, activeTopic };
-                    window.history.pushState(newState, '', '');
-                    setWorkoutConfig(config); 
-                    setView('workout'); 
+                    window.history.pushState({ view: 'workout', workoutConfig: config, activeTopic }, '', '');
+                    setWorkoutConfig(config); setView('workout'); 
                 };
-
                 const handleSearchSelect = (question) => {
-                    const config = { 
-                        subtopic: "Search Practice", 
-                        srMode: false, 
-                        timerSetting: null, 
-                        questionsData: [question], 
-                        initialIndex: 0 
-                    };
-                    const newState = { view: 'workout', workoutConfig: config, activeTopic };
-                    window.history.pushState(newState, '', '');
-                    setWorkoutConfig(config);
-                    setView('workout');
+                    const config = { subtopic: "Search Practice", srMode: false, timerSetting: null, questionsData: [question], initialIndex: 0 };
+                    window.history.pushState({ view: 'workout', workoutConfig: config, activeTopic }, '', '');
+                    setWorkoutConfig(config); setView('workout');
                 };
 
                 return (
@@ -894,9 +690,7 @@
                 );
             };
             const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<App />);
-        } catch (err) {
-            console.error(err);
-        }
+        } catch (err) { console.error(err); }
     </script>
 </body>
 </html>
